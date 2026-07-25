@@ -239,7 +239,28 @@ class SettingsScreen extends ConsumerWidget {
                   value: s.keepTemporary,
                   onChanged: (v) => update(s.copyWith(keepTemporary: v)),
                 ),
-                const Divider(),
+                const Divider(height: 32),
+                Text(
+                  'Open source',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 5),
+                const Text(
+                  'PrivacyCam’s source code is public under the Apache License 2.0. This lets anyone inspect how photos, videos, and PDFs are handled, independently review privacy and security claims, and contribute fixes or improvements.',
+                  style: TextStyle(color: Colors.black54, height: 1.4),
+                ),
+                const SizedBox(height: 6),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.code_rounded),
+                  title: const Text('View source on GitHub'),
+                  subtitle: const Text(
+                    'Audit, contribute, or build it yourself',
+                  ),
+                  trailing: const Icon(Icons.open_in_new_rounded, size: 20),
+                  onTap: () => _openLink(context, AppLinks.sourceCode),
+                ),
+                const Divider(height: 32),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.language_rounded),
@@ -440,6 +461,21 @@ class SettingsScreen extends ConsumerWidget {
                 onChanged: (value) =>
                     update(settings.copyWith(keepTemporary: value)),
               ),
+            ),
+          ],
+        ),
+        CupertinoListSection.insetGrouped(
+          header: const Text('OPEN SOURCE'),
+          footer: const Text(
+            'Public source lets anyone inspect how photos, videos, and PDFs are handled, independently review privacy and security claims, and contribute fixes or improvements.',
+          ),
+          children: [
+            CupertinoListTile(
+              leading: const Icon(Icons.code_rounded, color: forest),
+              title: const Text('View source on GitHub'),
+              subtitle: const Text('Apache License 2.0'),
+              trailing: const CupertinoListTileChevron(),
+              onTap: () => _openLink(context, AppLinks.sourceCode),
             ),
           ],
         ),

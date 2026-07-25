@@ -10,6 +10,7 @@ abstract final class AppLinks {
   static final termsOfService = Uri.parse(
     'https://ak375456.github.io/privacycam-legal/terms.html',
   );
+  static final sourceCode = Uri.parse('https://github.com/ak375456/privacycam');
 
   static Future<bool> open(Uri uri) =>
       launchUrl(uri, mode: LaunchMode.externalApplication);
