@@ -26,3 +26,22 @@ number plates.
 
 The complete MIT License text and upstream copyright notice are bundled at
 `assets/legal/OPEN_IMAGE_MODELS_MIT_LICENSE.txt`.
+
+## Pixabay onboarding video
+
+PrivacyCam includes a modified before/after redaction demonstration derived
+from "Car, Automobile, Vehicle" by Pixabay contributor MabelAmber.
+
+- Source: https://pixabay.com/videos/car-automobile-vehicle-28132/
+- Source publication date: October 21, 2019
+- License: Pixabay Content License
+- License summary: https://pixabay.com/service/license-summary/
+- Legally binding terms: https://pixabay.com/service/terms/
+- Bundled derivative:
+  `assets/onboarding/video_before_after.mp4`
+- Bundled derivative SHA-256:
+  `e7bd4c5c7efdc85f612933a8dcee09dcd08276b8685aa48488dfb3aeaced93e6`
+
+The video is not licensed under Apache License 2.0. It remains subject to the
+Pixabay Content License and the restrictions summarized in
+`assets/legal/PIXABAY_CONTENT_LICENSE_NOTICE.md`.

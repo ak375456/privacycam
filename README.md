@@ -63,15 +63,16 @@ remain the authoritative ML integration target.
 PrivacyCam source code is licensed under the Apache License 2.0. See
 [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE).
 
-Bundled machine-learning models retain their upstream licenses. Their sources,
-hashes, and required notices are documented in
+Bundled machine-learning models and the onboarding video retain their upstream
+licenses. Their sources, hashes, and required notices are documented in
 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md). The PrivacyCam name and logo
 are not granted for use by the software license; see
 [`TRADEMARKS.md`](TRADEMARKS.md).
 
-The onboarding examples are synthetic demonstration media created for this
-project. They contain fictional people and data and must not be treated as real
-records.
+The onboarding images are synthetic demonstration media created for this
+project. The onboarding video is a modified Pixabay asset licensed separately
+under the Pixabay Content License. See
+[`ASSET_PROVENANCE.md`](ASSET_PROVENANCE.md) for its source and restrictions.
 
 ## Contributing and security
 
