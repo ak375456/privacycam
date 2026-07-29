@@ -589,7 +589,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
+				CURRENT_PROJECT_VERSION = 4;
 				CUSTOM_GROUP_ID = group.com.aftabfazalqayum.privacycam;
 				DEVELOPMENT_TEAM = 93KLT465W3;
 				ENABLE_BITCODE = NO;
@@ -818,7 +818,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
+				CURRENT_PROJECT_VERSION = 4;
 				CUSTOM_GROUP_ID = group.com.aftabfazalqayum.privacycam;
 				DEVELOPMENT_TEAM = 93KLT465W3;
 				ENABLE_BITCODE = NO;
@@ -845,7 +845,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
+				CURRENT_PROJECT_VERSION = 4;
 				CUSTOM_GROUP_ID = group.com.aftabfazalqayum.privacycam;
 				DEVELOPMENT_TEAM = 93KLT465W3;
 				ENABLE_BITCODE = NO;
