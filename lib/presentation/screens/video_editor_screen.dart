@@ -273,6 +273,7 @@ class _VideoEditorScreenState extends ConsumerState<VideoEditorScreen> {
                         _reviewPanel(session, activeTrackCount),
                       const SizedBox(height: 14),
                       _exportAction(
+                        session: session,
                         activeTrackCount: activeTrackCount,
                         exportMaskCount: exportMaskCount,
                       ),
@@ -544,6 +545,7 @@ class _VideoEditorScreenState extends ConsumerState<VideoEditorScreen> {
   );
 
   Widget _exportAction({
+    required VideoSession session,
     required int activeTrackCount,
     required int exportMaskCount,
   }) => Column(
@@ -572,9 +574,7 @@ class _VideoEditorScreenState extends ConsumerState<VideoEditorScreen> {
         width: double.infinity,
         child: AdaptiveButton(
           style: AdaptiveButtonStyle.primary,
-          onPressed: activeTrackCount == 0
-              ? null
-              : () => context.push('/video/export'),
+          onPressed: activeTrackCount == 0 ? null : () => _openExport(session),
           child: const Padding(
             padding: EdgeInsets.symmetric(vertical: 5),
             child: Row(
@@ -590,6 +590,15 @@ class _VideoEditorScreenState extends ConsumerState<VideoEditorScreen> {
       ),
     ],
   );
+
+  Future<void> _openExport(VideoSession session) async {
+    if (privacyCamVideoRequiresPro(session.durationMs) &&
+        !ref.read(proAccessProvider)) {
+      final unlocked = await context.push<bool>('/pro');
+      if (!mounted || unlocked != true) return;
+    }
+    if (mounted) context.push('/video/export');
+  }
 
   Widget _effectStrengthControl(RedactionStyle style, AppSettings settings) {
     final isBlur = style == RedactionStyle.blur;

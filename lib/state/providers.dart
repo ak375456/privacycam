@@ -552,10 +552,14 @@ final proPurchaseProvider =
       ProPurchaseController.new,
     );
 
-final batchAccessProvider = Provider<bool>((ref) {
+final proAccessProvider = Provider<bool>((ref) {
   final purchase = ref.watch(proPurchaseProvider);
   return !purchase.supported || purchase.isPro;
 });
+
+final batchAccessProvider = Provider<bool>(
+  (ref) => ref.watch(proAccessProvider),
+);
 
 final batchLimitProvider = Provider<int>(
   (ref) => ref.watch(batchAccessProvider) ? 10 : 1,

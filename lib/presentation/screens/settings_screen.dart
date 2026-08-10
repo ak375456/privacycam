@@ -123,7 +123,7 @@ class SettingsScreen extends ConsumerWidget {
                       subtitle: Text(
                         pro.isPro
                             ? 'Lifetime access unlocked'
-                            : 'Photo batches and PDFs over 2 pages',
+                            : 'Longer videos, photo batches, and longer PDFs',
                       ),
                       trailing: const Icon(Icons.chevron_right_rounded),
                       onTap: () => context.push('/pro'),
@@ -335,7 +335,7 @@ class SettingsScreen extends ConsumerWidget {
             footer: Text(
               pro.isPro
                   ? 'Your lifetime Pro purchase is active.'
-                  : 'Single photos, videos, and PDFs up to 2 pages remain free.',
+                  : 'Single photos, videos up to 15 seconds, and PDFs up to 2 pages remain free.',
             ),
             children: [
               CupertinoListTile(
@@ -351,7 +351,7 @@ class SettingsScreen extends ConsumerWidget {
                 subtitle: Text(
                   pro.isPro
                       ? 'Lifetime access'
-                      : 'Photo batches and longer PDFs',
+                      : 'Longer videos, photo batches, and longer PDFs',
                 ),
                 trailing: const CupertinoListTileChevron(),
                 onTap: () => context.push('/pro'),

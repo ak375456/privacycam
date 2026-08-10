@@ -49,7 +49,7 @@ class _ProScreenState extends ConsumerState<ProScreen> {
               _UnlockedContent(onDone: _finishAfterUnlock)
             else ...[
               Text(
-                'Privacy protection stays free. Pro saves time.',
+                'Core privacy protection stays free. Pro unlocks more.',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.w800,
@@ -58,7 +58,7 @@ class _ProScreenState extends ConsumerState<ProScreen> {
               ),
               const SizedBox(height: 8),
               const Text(
-                'All photo and video privacy tools stay free. PDFs up to 2 pages are free too.',
+                'Protect single photos, videos up to 15 seconds, and PDFs up to 2 pages for free.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Color(0xFF52615D),
@@ -67,6 +67,11 @@ class _ProScreenState extends ConsumerState<ProScreen> {
                 ),
               ),
               const SizedBox(height: 24),
+              const _Benefit(
+                icon: Icons.movie_filter_outlined,
+                title: 'Protect longer videos',
+                detail: 'Review, edit, and export clips up to 60 seconds.',
+              ),
               const _Benefit(
                 icon: Icons.picture_as_pdf_outlined,
                 title: 'Protect longer PDFs',
@@ -394,7 +399,7 @@ class _UnlockedContent extends StatelessWidget {
       ),
       const SizedBox(height: 8),
       const Text(
-        'You can process up to 10 photos at a time and protect PDFs beyond 2 pages.',
+        'You can protect videos up to 60 seconds, process up to 10 photos at a time, and protect PDFs beyond 2 pages.',
         textAlign: TextAlign.center,
         style: TextStyle(color: Color(0xFF52615D), height: 1.4),
       ),

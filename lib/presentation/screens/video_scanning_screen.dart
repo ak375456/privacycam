@@ -37,6 +37,17 @@ class _VideoScanningScreenState extends ConsumerState<VideoScanningScreen> {
       if (!mounted) return;
       final state = ref.read(videoEditorProvider);
       if (state.stage == VideoWorkStage.ready) context.go('/video/editor');
+    } on VideoProRequiredException {
+      if (!mounted) return;
+      final unlocked = await context.push<bool>('/pro');
+      if (!mounted) return;
+      if (unlocked == true) {
+        await _start();
+        return;
+      }
+      await ref.read(videoServiceProvider).deleteWorkingFile(widget.path);
+      await ref.read(videoEditorProvider.notifier).clear();
+      if (mounted) context.go('/home');
     } catch (_) {
       // The controller owns the user-safe error message.
     }

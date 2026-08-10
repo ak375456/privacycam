@@ -2,10 +2,21 @@ import 'dart:ui';
 
 import 'models.dart';
 
+const int privacyCamVideoFreeMaxDurationMs = 15 * 1000;
 const int privacyCamVideoMaxDurationMs = 60 * 1000;
 const int privacyCamVideoMaxBytes = 600 * 1024 * 1024;
 const int privacyCamVideoMaxExportTracks = 48;
 const int privacyCamVideoAnalysisVersion = 11;
+
+bool privacyCamVideoRequiresPro(int durationMs) =>
+    durationMs > privacyCamVideoFreeMaxDurationMs;
+
+class VideoProRequiredException implements Exception {
+  const VideoProRequiredException();
+
+  @override
+  String toString() => 'Videos longer than 15 seconds require PrivacyCam Pro.';
+}
 
 enum VideoWorkStage {
   idle,

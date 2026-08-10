@@ -179,9 +179,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     if (mounted) context.push('/batch');
   }
 
-  void _resumeVideo() {
+  Future<void> _resumeVideo() async {
     final session = ref.read(videoEditorProvider).session;
     if (session == null) return;
+    if (privacyCamVideoRequiresPro(session.durationMs) &&
+        !ref.read(proAccessProvider)) {
+      final unlocked = await context.push<bool>('/pro');
+      if (!mounted || unlocked != true) return;
+    }
     if (session.tracks.isEmpty) {
       context.push('/video/scan', extra: session.sourcePath);
     } else {
@@ -295,6 +300,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             const SizedBox(height: 20),
             _VideoActionsCard(
               busyAction: _busyAction,
+              pro: hasBatchAccess,
               onRecord: () => _chooseVideo(ImageSource.camera),
               onChoose: () => _chooseVideo(ImageSource.gallery),
             ),
@@ -546,11 +552,13 @@ class _ResumeVideoCard extends StatelessWidget {
 class _VideoActionsCard extends StatelessWidget {
   const _VideoActionsCard({
     required this.busyAction,
+    required this.pro,
     required this.onRecord,
     required this.onChoose,
   });
 
   final _HomeAction? busyAction;
+  final bool pro;
   final VoidCallback onRecord;
   final VoidCallback onChoose;
 
@@ -576,8 +584,10 @@ class _VideoActionsCard extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 5),
-        const Text(
-          'On-device tracking for clips up to 60 seconds. Review every result before export.',
+        Text(
+          pro
+              ? 'Pro unlocked · Protect clips up to 60 seconds.'
+              : 'Up to 15 seconds free · Up to 60 seconds with Pro.',
           style: TextStyle(color: Color(0xFF52615D), height: 1.35),
         ),
         const SizedBox(height: 11),

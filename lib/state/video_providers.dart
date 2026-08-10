@@ -144,6 +144,10 @@ class VideoEditorController extends Notifier<VideoEditorState> {
     try {
       final info = await ref.read(videoServiceProvider).inspect(path);
       if (_cancelled) return;
+      if (privacyCamVideoRequiresPro(info.durationMs) &&
+          !ref.read(proAccessProvider)) {
+        throw const VideoProRequiredException();
+      }
       final session = VideoSession(
         sourcePath: path,
         durationMs: info.durationMs,
@@ -159,6 +163,12 @@ class VideoEditorController extends Notifier<VideoEditorState> {
         detail: 'Preparing on-device privacy checks',
       );
       await _persist();
+    } on VideoProRequiredException catch (error) {
+      state = VideoEditorState(
+        stage: VideoWorkStage.failed,
+        error: error.toString(),
+      );
+      rethrow;
     } catch (error) {
       await ref.read(videoServiceProvider).deleteWorkingFile(path);
       state = VideoEditorState(
@@ -643,6 +653,15 @@ class VideoEditorController extends Notifier<VideoEditorState> {
   Future<void> export() async {
     final session = state.session;
     if (session == null || state.isBusy) return;
+    if (privacyCamVideoRequiresPro(session.durationMs) &&
+        !ref.read(proAccessProvider)) {
+      const error = VideoProRequiredException();
+      state = state.copyWith(
+        stage: VideoWorkStage.failed,
+        error: error.toString(),
+      );
+      throw error;
+    }
     final activeTracks = session.exportTracks().length;
     if (activeTracks > privacyCamVideoMaxExportTracks) {
       const message =
