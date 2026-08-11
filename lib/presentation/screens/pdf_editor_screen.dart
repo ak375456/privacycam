@@ -37,6 +37,8 @@ class _PdfEditorScreenState extends ConsumerState<PdfEditorScreen> {
   double areaScale = 100;
   Offset? brushTouchLocal;
   Offset? eraserTouchLocal;
+  bool pinchGesture = false;
+  bool eraserGestureHasHistory = false;
 
   @override
   void dispose() {
@@ -134,41 +136,33 @@ class _PdfEditorScreenState extends ConsumerState<PdfEditorScreen> {
                           ),
                       ],
                     );
-                    final canvas = tool == EditorTool.zoom
-                        ? content
-                        : GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onPanStart: (details) => _panStart(
-                              geometry,
-                              details.localPosition,
-                              details.globalPosition,
-                              image,
-                            ),
-                            onPanUpdate: (details) => _panUpdate(
-                              geometry,
-                              details.localPosition,
-                              details.globalPosition,
-                            ),
-                            onPanEnd: (_) => _panEnd(geometry),
-                            onPanCancel: _cancelGesture,
-                            onTapDown: (details) =>
-                                _tapDown(details.globalPosition),
-                            onTapUp: (details) =>
-                                _tap(geometry, details.localPosition, image),
-                            child: content,
-                          );
+                    final canvas = GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTapDown: (details) => _tapDown(details.globalPosition),
+                      onTapUp: (details) =>
+                          _tap(geometry, details.localPosition, image),
+                      child: content,
+                    );
                     return Stack(
                       key: _canvasViewportKey,
                       children: [
                         Positioned.fill(
                           child: InteractiveViewer(
                             transformationController: _transformationController,
-                            panEnabled: tool == EditorTool.zoom,
-                            scaleEnabled: tool == EditorTool.zoom,
+                            // A single finger stays dedicated to the active
+                            // editing tool. Once a second pointer joins, the
+                            // same gesture can pan as well as pinch-zoom.
+                            panEnabled: pinchGesture,
+                            scaleEnabled: true,
                             minScale: 1,
                             maxScale: 8,
                             boundaryMargin: const EdgeInsets.all(80),
                             clipBehavior: Clip.hardEdge,
+                            onInteractionStart: (details) =>
+                                _interactionStart(geometry, details, image),
+                            onInteractionUpdate: (details) =>
+                                _interactionUpdate(geometry, details),
+                            onInteractionEnd: (_) => _interactionEnd(geometry),
                             child: SizedBox(
                               width: constraints.maxWidth,
                               height: constraints.maxHeight,
@@ -183,6 +177,30 @@ class _PdfEditorScreenState extends ConsumerState<PdfEditorScreen> {
                           ),
                         if (eraserTouchLocal != null)
                           _eraserCursor(eraserTouchLocal!),
+                        Positioned(
+                          top: 8,
+                          right: 8,
+                          child: Semantics(
+                            label: 'Pinch to zoom',
+                            child: IgnorePointer(
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  color: const Color(0xD91B211F),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: Colors.white24),
+                                ),
+                                child: const SizedBox.square(
+                                  dimension: 38,
+                                  child: Icon(
+                                    Icons.pinch_rounded,
+                                    size: 20,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
                       ],
                     );
                   },
@@ -193,9 +211,7 @@ class _PdfEditorScreenState extends ConsumerState<PdfEditorScreen> {
               constraints: BoxConstraints(
                 maxHeight: activeId != null
                     ? 360
-                    : tool == EditorTool.brush ||
-                          tool == EditorTool.eraser ||
-                          tool == EditorTool.zoom
+                    : tool == EditorTool.brush || tool == EditorTool.eraser
                     ? 300
                     : 245,
               ),
@@ -234,19 +250,7 @@ class _PdfEditorScreenState extends ConsumerState<PdfEditorScreen> {
                       const _ToolHint(
                         icon: Icons.auto_fix_off_outlined,
                         text:
-                            'Tap or drag across a box or brush mark to remove it. Use Undo if you remove the wrong one.',
-                      ),
-                    ],
-                    if (tool == EditorTool.zoom) ...[
-                      const SizedBox(height: 7),
-                      _ToolHint(
-                        icon: Icons.pinch_outlined,
-                        text:
-                            'Pinch to zoom and drag to move the page. Your zoom stays when you return to Select, Brush, or Eraser.',
-                        action: TextButton(
-                          onPressed: _resetZoom,
-                          child: const Text('Reset'),
-                        ),
+                            'Drag across a brush line to erase only the touched part. Boxes are removed as a whole.',
                       ),
                     ],
                     if (activeId != null && tool == EditorTool.select) ...[
@@ -310,7 +314,6 @@ class _PdfEditorScreenState extends ConsumerState<PdfEditorScreen> {
       _toolButton(EditorTool.rectangle, Icons.crop_square, 'Rectangle'),
       _toolButton(EditorTool.brush, Icons.brush_outlined, 'Brush'),
       _toolButton(EditorTool.eraser, Icons.auto_fix_off_outlined, 'Eraser'),
-      _toolButton(EditorTool.zoom, Icons.zoom_in_outlined, 'Zoom'),
     ],
   );
 
@@ -428,11 +431,11 @@ class _PdfEditorScreenState extends ConsumerState<PdfEditorScreen> {
 
   void _panStart(
     ImageGeometry geometry,
-    Offset local,
-    Offset global,
+    Offset scenePoint,
+    Offset viewportPoint,
     ImageSession image,
   ) {
-    final point = geometry.toImage(local);
+    final point = geometry.toImage(scenePoint);
     lastImagePoint = point;
     switch (tool) {
       case EditorTool.rectangle:
@@ -443,7 +446,7 @@ class _PdfEditorScreenState extends ConsumerState<PdfEditorScreen> {
       case EditorTool.brush:
         setState(() {
           stroke = [point];
-          brushTouchLocal = _viewportLocal(global);
+          brushTouchLocal = viewportPoint;
         });
       case EditorTool.select:
         final hit = image.items
@@ -459,14 +462,18 @@ class _PdfEditorScreenState extends ConsumerState<PdfEditorScreen> {
         }
       case EditorTool.eraser:
         _erase(point, geometry.factor);
-        setState(() => eraserTouchLocal = _viewportLocal(global));
+        setState(() => eraserTouchLocal = viewportPoint);
       case EditorTool.zoom:
         break;
     }
   }
 
-  void _panUpdate(ImageGeometry geometry, Offset local, Offset global) {
-    final point = geometry.toImage(local);
+  void _panUpdate(
+    ImageGeometry geometry,
+    Offset scenePoint,
+    Offset viewportPoint,
+  ) {
+    final point = geometry.toImage(scenePoint);
     switch (tool) {
       case EditorTool.rectangle:
         final first = gestureStart;
@@ -478,7 +485,7 @@ class _PdfEditorScreenState extends ConsumerState<PdfEditorScreen> {
       case EditorTool.brush:
         setState(() {
           stroke = [...stroke, point];
-          brushTouchLocal = _viewportLocal(global);
+          brushTouchLocal = viewportPoint;
         });
       case EditorTool.select:
         if (activeId != null &&
@@ -496,7 +503,7 @@ class _PdfEditorScreenState extends ConsumerState<PdfEditorScreen> {
         }
       case EditorTool.eraser:
         _erase(point, geometry.factor);
-        setState(() => eraserTouchLocal = _viewportLocal(global));
+        setState(() => eraserTouchLocal = viewportPoint);
       case EditorTool.zoom:
         break;
     }
@@ -544,12 +551,58 @@ class _PdfEditorScreenState extends ConsumerState<PdfEditorScreen> {
       stroke = [];
       brushTouchLocal = null;
       eraserTouchLocal = null;
+      eraserGestureHasHistory = false;
     });
+  }
+
+  void _interactionStart(
+    ImageGeometry geometry,
+    ScaleStartDetails details,
+    ImageSession image,
+  ) {
+    pinchGesture = details.pointerCount > 1;
+    eraserGestureHasHistory = false;
+    if (pinchGesture) {
+      _cancelGesture();
+      return;
+    }
+    _panStart(
+      geometry,
+      _transformationController.toScene(details.localFocalPoint),
+      details.localFocalPoint,
+      image,
+    );
+  }
+
+  void _interactionUpdate(ImageGeometry geometry, ScaleUpdateDetails details) {
+    if (details.pointerCount > 1 || details.scale != 1) {
+      if (!pinchGesture) {
+        pinchGesture = true;
+        _cancelGesture();
+      }
+      return;
+    }
+    if (pinchGesture) return;
+    _panUpdate(
+      geometry,
+      _transformationController.toScene(details.localFocalPoint),
+      details.localFocalPoint,
+    );
+  }
+
+  void _interactionEnd(ImageGeometry geometry) {
+    if (pinchGesture) {
+      pinchGesture = false;
+      _cancelGesture();
+      return;
+    }
+    _panEnd(geometry);
   }
 
   void _tap(ImageGeometry geometry, Offset local, ImageSession image) {
     final point = geometry.toImage(local);
     if (tool == EditorTool.eraser) {
+      eraserGestureHasHistory = false;
       _erase(point, geometry.factor);
       setState(() => eraserTouchLocal = null);
       return;
@@ -592,9 +645,14 @@ class _PdfEditorScreenState extends ConsumerState<PdfEditorScreen> {
 
   void _erase(Offset point, double geometryFactor) {
     final zoom = _transformationController.value.getMaxScaleOnAxis();
-    ref
+    final changed = ref
         .read(pdfSessionProvider.notifier)
-        .eraseAt(point, radius: 22 / (geometryFactor * zoom));
+        .eraseAt(
+          point,
+          radius: 22 / (geometryFactor * zoom),
+          recordHistory: !eraserGestureHasHistory,
+        );
+    if (changed) eraserGestureHasHistory = true;
   }
 
   Offset? _viewportLocal(Offset global) {
@@ -612,6 +670,7 @@ class _PdfEditorScreenState extends ConsumerState<PdfEditorScreen> {
       stroke = [];
       brushTouchLocal = null;
       eraserTouchLocal = null;
+      eraserGestureHasHistory = false;
     });
   }
 
@@ -767,11 +826,10 @@ class _PdfEditorScreenState extends ConsumerState<PdfEditorScreen> {
 }
 
 class _ToolHint extends StatelessWidget {
-  const _ToolHint({required this.icon, required this.text, this.action});
+  const _ToolHint({required this.icon, required this.text});
 
   final IconData icon;
   final String text;
-  final Widget? action;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -795,7 +853,6 @@ class _ToolHint extends StatelessWidget {
             ),
           ),
         ),
-        ?action,
       ],
     ),
   );

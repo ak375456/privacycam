@@ -14,7 +14,7 @@ class SensitiveTextClassifier {
     caseSensitive: false,
   );
   static final _addressLabel = RegExp(
-    r'\b(?:address|billing\s+address|delivery\s+address|shipping\s+address|residential\s+address)\b\s*:?',
+    r'\b(?:address|billing\s+address|delivery\s+address|shipping\s+address|residential\s+address|location|current\s+location|based\s+in|located\s+in)\b\s*:?',
     caseSensitive: false,
   );
   static final _streetAddress = RegExp(
@@ -31,6 +31,10 @@ class SensitiveTextClassifier {
   );
   static final _postalLocation = RegExp(
     r"\b(?:[A-Z][A-Z .'-]+,\s*)?[A-Z]{2}\s+\d{5}(?:-\d{4})?\b|\b[A-Z]\d[A-Z]\s?\d[A-Z]\d\b|\b[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b",
+    caseSensitive: false,
+  );
+  static final _cityLocation = RegExp(
+    r"^\s*(?:islamabad|rawalpindi|lahore|karachi|peshawar|quetta|faisalabad|multan|sialkot|gujranwala|hyderabad|abu\s+dhabi|dubai|sharjah|ajman|al\s+ain|ras\s+al\s+khaimah|fujairah|umm\s+al\s+quwain|riyadh|jeddah|doha|muscat|manama|kuwait\s+city|cairo|amman|beirut|istanbul|london|paris|berlin|madrid|rome|amsterdam|brussels|vienna|zurich|geneva|stockholm|oslo|copenhagen|helsinki|dublin|lisbon|prague|warsaw|budapest|athens|singapore|tokyo|seoul|beijing|shanghai|hong\s+kong|bangkok|kuala\s+lumpur|jakarta|manila|new\s+delhi|delhi|mumbai|bengaluru|bangalore|toronto|vancouver|montreal|new\s+york|los\s+angeles|san\s+francisco|chicago|boston|seattle|austin|sydney|melbourne|brisbane|auckland|cape\s+town|johannesburg|nairobi)(?:\s*(?:,|[-–])\s*[a-z][a-z .'-]{1,40})?\s*$",
     caseSensitive: false,
   );
   static final _cardSecurityCodeLabel = RegExp(
@@ -76,7 +80,10 @@ class SensitiveTextClassifier {
       _streetAddress.hasMatch(text) ||
       _structuredAddress.hasMatch(text) ||
       _poBox.hasMatch(text) ||
-      _postalLocation.hasMatch(text);
+      _postalLocation.hasMatch(text) ||
+      looksLikeCityLocation(text);
+
+  bool looksLikeCityLocation(String text) => _cityLocation.hasMatch(text);
 
   bool isCardSecurityCodeLabel(String text) {
     if (_cardSecurityCodeLabel.hasMatch(text)) return true;

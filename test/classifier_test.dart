@@ -39,6 +39,27 @@ void main() {
       expect(classifier.classify('Order 12345'), RedactionCategory.otherText);
     });
 
+    test('recognizes high-confidence CV city and location lines', () {
+      for (final value in [
+        'Islamabad',
+        'Islamabad, Pakistan',
+        'Abu Dhabi',
+        'Abu Dhabi - United Arab Emirates',
+        'Location: Islamabad',
+        'Based in Abu Dhabi',
+      ]) {
+        expect(
+          classifier.classify(value),
+          RedactionCategory.address,
+          reason: value,
+        );
+      }
+      expect(
+        classifier.classify('Professional Summary'),
+        RedactionCategory.otherText,
+      );
+    });
+
     test('classifies common card security-code labels', () {
       for (final value in [
         'CVV 123',

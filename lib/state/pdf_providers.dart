@@ -9,6 +9,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../domain/models.dart';
 import '../domain/pdf_models.dart';
 import '../services/pdf_service.dart';
+import '../services/stroke_eraser.dart';
 import 'providers.dart';
 
 const pdfFreePageLimit = 2;
@@ -369,24 +370,28 @@ class PdfSessionController extends Notifier<PdfSession?> {
     _commitImage(image.copyWith(strokes: [...image.strokes, stroke]));
   }
 
-  bool eraseAt(Offset point, {double radius = 18}) {
+  bool eraseAt(Offset point, {double radius = 18, bool recordHistory = true}) {
     final image = state!.currentPage!.image;
-    final nearbyStrokes =
-        image.strokes
-            .where(
-              (stroke) => _distance(stroke, point) <= radius + stroke.size / 2,
-            )
-            .toList()
-          ..sort((a, b) => _distance(a, point).compareTo(_distance(b, point)));
-
-    if (nearbyStrokes.isNotEmpty) {
-      final erasedId = nearbyStrokes.first.id;
-      _commitImage(
-        image.copyWith(
-          strokes: image.strokes
-              .where((stroke) => stroke.id != erasedId)
-              .toList(),
-        ),
+    final token = DateTime.now().microsecondsSinceEpoch;
+    var changedStroke = false;
+    final remainingStrokes = <BrushStroke>[];
+    for (var index = 0; index < image.strokes.length; index++) {
+      final stroke = image.strokes[index];
+      final fragments = eraseBrushStroke(
+        stroke,
+        center: point,
+        radius: radius,
+        fragmentIdPrefix: 'pdf_stroke_erased_${token}_$index',
+      );
+      final unchanged =
+          fragments.length == 1 && identical(fragments.first, stroke);
+      changedStroke = changedStroke || !unchanged;
+      remainingStrokes.addAll(fragments);
+    }
+    if (changedStroke) {
+      _applyErasure(
+        image.copyWith(strokes: remainingStrokes),
+        recordHistory: recordHistory,
       );
       return true;
     }
@@ -399,7 +404,7 @@ class PdfSessionController extends Notifier<PdfSession?> {
         .lastOrNull;
     if (hit == null) return false;
 
-    _commitImage(
+    _applyErasure(
       image.copyWith(
         items: [
           for (final item in image.items)
@@ -409,15 +414,32 @@ class PdfSessionController extends Notifier<PdfSession?> {
               item.copyWith(selected: false),
         ],
       ),
+      recordHistory: recordHistory,
     );
     return true;
   }
 
-  double _distance(BrushStroke stroke, Offset point) => stroke.points.isEmpty
-      ? double.infinity
-      : stroke.points
-            .map((candidate) => (candidate - point).distance)
-            .reduce((a, b) => a < b ? a : b);
+  void _applyErasure(ImageSession next, {required bool recordHistory}) {
+    if (recordHistory) {
+      _commitImage(next);
+      return;
+    }
+    final s = state;
+    if (s == null || s.currentPage == null) return;
+    final index = s.currentPageIndex;
+    final clean = next.copyWith(clearPreview: true, clearExport: true);
+    state = s.copyWith(
+      pages: [
+        for (var pageIndex = 0; pageIndex < s.pages.length; pageIndex++)
+          pageIndex == index
+              ? s.pages[pageIndex].copyWith(image: clean)
+              : s.pages[pageIndex],
+      ],
+      status: PdfWorkStatus.ready,
+      clearExport: true,
+      flatteningVerified: false,
+    );
+  }
 
   void undo() {
     final s = state;
