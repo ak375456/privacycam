@@ -77,7 +77,7 @@ class SettingsScreen extends ConsumerWidget {
       RedactionCategory.otherText,
       Icons.text_fields_rounded,
       'Other detected text',
-      'All other readable text; this may hide a lot',
+      'All other readable text; off by default to keep documents readable',
     ),
   ];
 

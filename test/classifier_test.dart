@@ -63,4 +63,10 @@ void main() {
   test('QR detections default to strong pixelation', () {
     expect(RedactionCategory.qrCode.defaultStyle, RedactionStyle.pixelate);
   });
+
+  test('ordinary OCR text remains readable by default', () {
+    expect(RedactionCategory.otherText.selectedByDefault, isFalse);
+    expect(RedactionCategory.email.selectedByDefault, isTrue);
+    expect(RedactionCategory.address.selectedByDefault, isTrue);
+  });
 }

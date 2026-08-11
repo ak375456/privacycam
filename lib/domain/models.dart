@@ -155,7 +155,9 @@ extension CategoryInfo on RedactionCategory {
   };
 
   bool get selectedByDefault =>
-      this != RedactionCategory.manual && this != RedactionCategory.person;
+      this != RedactionCategory.manual &&
+      this != RedactionCategory.person &&
+      this != RedactionCategory.otherText;
   RedactionStyle get defaultStyle => switch (this) {
     RedactionCategory.face => RedactionStyle.blur,
     RedactionCategory.person => RedactionStyle.blackout,

@@ -161,26 +161,39 @@ class SettingsController extends Notifier<AppSettings> {
 Set<RedactionCategory> _readAutoHideCategories(SharedPreferences preferences) {
   final saved = preferences.getStringList('autoHideCategories');
   const addressMigrationKey = 'autoHideAddressIntroducedV1';
+  const ordinaryTextMigrationKey = 'autoHideOtherTextDisabledByDefaultV1';
   if (saved == null) {
     unawaited(preferences.setBool(addressMigrationKey, true));
+    unawaited(preferences.setBool(ordinaryTextMigrationKey, true));
     return Set.unmodifiable(
-      RedactionCategory.values.where(
-        (category) =>
-            category != RedactionCategory.manual &&
-            category != RedactionCategory.person,
-      ),
+      RedactionCategory.values.where((category) => category.selectedByDefault),
     );
   }
   final savedCategories = saved.toSet();
+  var categoriesChanged = false;
   if (preferences.getBool(addressMigrationKey) != true) {
-    savedCategories.add(RedactionCategory.address.name);
+    categoriesChanged =
+        savedCategories.add(RedactionCategory.address.name) ||
+        categoriesChanged;
+    unawaited(preferences.setBool(addressMigrationKey, true));
+  }
+  if (preferences.getBool(ordinaryTextMigrationKey) != true) {
+    // Earlier versions enabled the catch-all OCR category by default. In a
+    // text-heavy PDF that selected almost every line and rendered the page as
+    // rows of black masks. Reset it once; users can still explicitly enable
+    // "Other detected text" when hiding all readable text is intentional.
+    categoriesChanged =
+        savedCategories.remove(RedactionCategory.otherText.name) ||
+        categoriesChanged;
+    unawaited(preferences.setBool(ordinaryTextMigrationKey, true));
+  }
+  if (categoriesChanged) {
     unawaited(
       preferences.setStringList(
         'autoHideCategories',
         savedCategories.toList()..sort(),
       ),
     );
-    unawaited(preferences.setBool(addressMigrationKey, true));
   }
   return Set.unmodifiable(
     RedactionCategory.values.where(
