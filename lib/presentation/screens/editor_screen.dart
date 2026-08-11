@@ -9,6 +9,7 @@ import '../../domain/models.dart';
 import '../../state/providers.dart';
 import '../widgets/adaptive_ui.dart';
 import '../widgets/batch_strip.dart';
+import '../widgets/flower_redaction.dart';
 import '../widgets/image_geometry.dart';
 import '../widgets/new_image_action.dart';
 import '../widgets/privacy_loader.dart';
@@ -413,21 +414,30 @@ class _EditorState extends ConsumerState<EditorScreen> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            DecoratedBox(
-              decoration: BoxDecoration(
-                color: switch (item.style) {
-                  RedactionStyle.blackout => Colors.black,
-                  RedactionStyle.blur => forest.withValues(alpha: .62),
-                  RedactionStyle.pixelate => Colors.blueGrey.withValues(
-                    alpha: .75,
-                  ),
-                },
+            if (item.style == RedactionStyle.flowers)
+              FlowerRedaction(
                 border: Border.all(
                   color: showHandles ? Colors.amber : Colors.white,
                   width: showHandles ? 3 : 2,
                 ),
+              )
+            else
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: switch (item.style) {
+                    RedactionStyle.blackout => Colors.black,
+                    RedactionStyle.blur => forest.withValues(alpha: .62),
+                    RedactionStyle.pixelate => Colors.blueGrey.withValues(
+                      alpha: .75,
+                    ),
+                    RedactionStyle.flowers => Colors.transparent,
+                  },
+                  border: Border.all(
+                    color: showHandles ? Colors.amber : Colors.white,
+                    width: showHandles ? 3 : 2,
+                  ),
+                ),
               ),
-            ),
             if (showHandles) ...[
               const _CornerHandle(alignment: Alignment.topLeft),
               const _CornerHandle(alignment: Alignment.topRight),
@@ -446,18 +456,33 @@ class _EditorState extends ConsumerState<EditorScreen> {
     return Positioned.fromRect(
       rect: r,
       child: IgnorePointer(
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: switch (style) {
-              RedactionStyle.blur => forest.withValues(alpha: .28),
-              RedactionStyle.pixelate => Colors.blueGrey.withValues(alpha: .3),
-              RedactionStyle.blackout => Colors.black.withValues(alpha: .42),
-            },
-            border: Border.all(color: Colors.amber, width: 2.5),
-          ),
-          child: const Center(
-            child: Icon(Icons.open_in_full, color: Colors.white70, size: 18),
-          ),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (style == RedactionStyle.flowers)
+              FlowerRedaction(
+                border: Border.all(color: Colors.amber, width: 2.5),
+              )
+            else
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: switch (style) {
+                    RedactionStyle.blur => forest.withValues(alpha: .28),
+                    RedactionStyle.pixelate => Colors.blueGrey.withValues(
+                      alpha: .3,
+                    ),
+                    RedactionStyle.blackout => Colors.black.withValues(
+                      alpha: .42,
+                    ),
+                    RedactionStyle.flowers => Colors.transparent,
+                  },
+                  border: Border.all(color: Colors.amber, width: 2.5),
+                ),
+              ),
+            const Center(
+              child: Icon(Icons.open_in_full, color: Colors.white70, size: 18),
+            ),
+          ],
         ),
       ),
     );
@@ -576,6 +601,11 @@ class _EditorState extends ConsumerState<EditorScreen> {
           icon: Icons.crop_square,
         ),
         AdaptiveAction(
+          label: 'Use flowers',
+          value: _ItemMenuChoice.flowers,
+          icon: Icons.local_florist_outlined,
+        ),
+        AdaptiveAction(
           label: 'Delete rectangle',
           value: _ItemMenuChoice.delete,
           icon: Icons.delete_outline,
@@ -592,6 +622,8 @@ class _EditorState extends ConsumerState<EditorScreen> {
         notifier.setStyle(item.id, RedactionStyle.pixelate);
       case _ItemMenuChoice.blackout:
         notifier.setStyle(item.id, RedactionStyle.blackout);
+      case _ItemMenuChoice.flowers:
+        notifier.setStyle(item.id, RedactionStyle.flowers);
       case _ItemMenuChoice.delete:
         notifier.deleteItem(item.id);
     }
@@ -606,7 +638,12 @@ class _StrokePainter extends CustomPainter {
   void paint(Canvas c, Size z) {
     if (s.points.isEmpty) return;
     final p = Paint()
-      ..color = Colors.black
+      ..color = switch (s.style) {
+        RedactionStyle.blur => forest.withValues(alpha: .7),
+        RedactionStyle.pixelate => Colors.blueGrey,
+        RedactionStyle.blackout => Colors.black,
+        RedactionStyle.flowers => const Color(0xFFF7A9C4),
+      }
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round
       ..strokeWidth = s.size * g.factor
@@ -628,7 +665,7 @@ class _StrokePainter extends CustomPainter {
 
 enum _RectHandle { move, topLeft, topRight, bottomLeft, bottomRight }
 
-enum _ItemMenuChoice { blur, pixelate, blackout, delete }
+enum _ItemMenuChoice { blur, pixelate, blackout, flowers, delete }
 
 class _CornerHandle extends StatelessWidget {
   const _CornerHandle({required this.alignment});

@@ -41,7 +41,9 @@ class _PdfExportScreenState extends ConsumerState<PdfExportScreen> {
         .where((item) => item.selected)
         .toList();
     if (selected != null && selected.isNotEmpty) {
-      effect = selected.any((item) => item.style == RedactionStyle.blur)
+      effect = selected.any((item) => item.style == RedactionStyle.flowers)
+          ? RedactionStyle.flowers
+          : selected.any((item) => item.style == RedactionStyle.blur)
           ? RedactionStyle.blur
           : selected.any((item) => item.style == RedactionStyle.pixelate)
           ? RedactionStyle.pixelate
@@ -282,7 +284,8 @@ class _PdfExportScreenState extends ConsumerState<PdfExportScreen> {
   );
 
   Widget _strengthCard() {
-    final showSlider = effect != RedactionStyle.blackout;
+    final showSlider =
+        effect == RedactionStyle.blur || effect == RedactionStyle.pixelate;
     final blur = effect == RedactionStyle.blur;
     final value = blur ? blurStrength : pixelSize;
     return Container(
@@ -307,6 +310,17 @@ class _PdfExportScreenState extends ConsumerState<PdfExportScreen> {
               RedactionStyle.blackout: Padding(
                 padding: EdgeInsets.symmetric(horizontal: 7),
                 child: Text('Blackout'),
+              ),
+              RedactionStyle.flowers: Padding(
+                padding: EdgeInsets.symmetric(horizontal: 6),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.local_florist_outlined, size: 16),
+                    SizedBox(width: 3),
+                    Text('Flowers'),
+                  ],
+                ),
               ),
             },
             onChanged: busy

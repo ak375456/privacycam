@@ -517,6 +517,7 @@ private class VideoRedactionShaderProgram(
                     "blur" -> if (bounds == null) 0f else 1f
                     "pixelate" -> if (bounds == null) 0f else 2f
                     "blackout" -> if (bounds == null) 0f else 3f
+                    "flowers" -> if (bounds == null) 0f else 3f
                     else -> 0f
                 })
                 val secureMinimum = when (track?.category) {

@@ -178,6 +178,10 @@ class ExportService {
     final y = item.bounds.top.floor().clamp(0, image.height - 1);
     final w = item.bounds.width.ceil().clamp(1, image.width - x);
     final h = item.bounds.height.ceil().clamp(1, image.height - y);
+    if (item.style == RedactionStyle.flowers) {
+      _drawFlowerCover(image, x: x, y: y, width: w, height: h);
+      return image;
+    }
     if (item.style == RedactionStyle.blackout) {
       img.fillRect(
         image,
@@ -270,6 +274,22 @@ class ExportService {
     double renderScale,
   ) {
     if (stroke.points.isEmpty) return image;
+    if (stroke.style == RedactionStyle.flowers) {
+      _drawStroke(image, stroke, img.ColorRgba8(247, 217, 229, 255));
+      final radius = max(2, (stroke.size / 5).round());
+      final step = max(1, (stroke.points.length / 24).ceil());
+      for (var i = 0; i < stroke.points.length; i += step) {
+        final point = stroke.points[i];
+        _drawFlower(
+          image,
+          point.dx.round(),
+          point.dy.round(),
+          radius,
+          alternate: (i ~/ step).isOdd,
+        );
+      }
+      return image;
+    }
     if (stroke.style == RedactionStyle.blackout) {
       _drawStroke(image, stroke, img.ColorRgba8(0, 0, 0, 255));
       return image;
@@ -364,6 +384,74 @@ class ExportService {
         );
       }
     }
+  }
+
+  void _drawFlowerCover(
+    img.Image image, {
+    required int x,
+    required int y,
+    required int width,
+    required int height,
+  }) {
+    img.fillRect(
+      image,
+      x1: x,
+      y1: y,
+      x2: x + width - 1,
+      y2: y + height - 1,
+      color: img.ColorRgba8(247, 217, 229, 255),
+    );
+    final spacing = min(72, max(14, (height * .72).round()));
+    final radius = max(2, (spacing * .2).round());
+    var row = 0;
+    for (var cy = y + spacing ~/ 2; cy < y + height; cy += spacing) {
+      final start = row.isEven ? spacing ~/ 2 : 0;
+      for (var cx = x + start; cx < x + width; cx += spacing) {
+        _drawFlower(image, cx, cy, radius, alternate: row.isOdd);
+      }
+      row++;
+    }
+  }
+
+  void _drawFlower(
+    img.Image image,
+    int centerX,
+    int centerY,
+    int radius, {
+    required bool alternate,
+  }) {
+    final petal = alternate
+        ? img.ColorRgba8(141, 107, 196, 255)
+        : img.ColorRgba8(231, 84, 128, 255);
+    final leaf = img.ColorRgba8(22, 130, 102, 255);
+    final center = img.ColorRgba8(255, 200, 61, 255);
+    img.drawCircle(
+      image,
+      x: centerX + radius,
+      y: centerY + radius * 2,
+      radius: max(1, radius ~/ 2),
+      color: leaf,
+      antialias: true,
+    );
+    for (var i = 0; i < 6; i++) {
+      final angle = i * pi / 3;
+      img.drawCircle(
+        image,
+        x: centerX + (cos(angle) * radius).round(),
+        y: centerY + (sin(angle) * radius).round(),
+        radius: max(1, (radius * .82).round()),
+        color: petal,
+        antialias: true,
+      );
+    }
+    img.drawCircle(
+      image,
+      x: centerX,
+      y: centerY,
+      radius: max(1, (radius * .62).round()),
+      color: center,
+      antialias: true,
+    );
   }
 
   Future<bool> verifyMetadataRemoved(String path) async {

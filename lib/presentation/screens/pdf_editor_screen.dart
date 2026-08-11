@@ -10,6 +10,7 @@ import '../../core/theme.dart';
 import '../../domain/models.dart';
 import '../../state/pdf_providers.dart';
 import '../widgets/adaptive_ui.dart';
+import '../widgets/flower_redaction.dart';
 import '../widgets/image_geometry.dart';
 
 class PdfEditorScreen extends ConsumerStatefulWidget {
@@ -298,6 +299,17 @@ class _PdfEditorScreenState extends ConsumerState<PdfEditorScreen> {
       RedactionStyle.blackout: Padding(
         padding: EdgeInsets.symmetric(horizontal: 10),
         child: Text('Blackout'),
+      ),
+      RedactionStyle.flowers: Padding(
+        padding: EdgeInsets.symmetric(horizontal: 8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.local_florist_outlined, size: 16),
+            SizedBox(width: 3),
+            Text('Flowers'),
+          ],
+        ),
       ),
     },
     onChanged: (value) {
@@ -697,23 +709,37 @@ class _PdfEditorScreenState extends ConsumerState<PdfEditorScreen> {
     return Positioned.fromRect(
       rect: geometry.toLocalRect(bounds),
       child: IgnorePointer(
-        child: Container(
-          decoration: BoxDecoration(
-            color: switch (item.style) {
-              RedactionStyle.blur => const Color(
-                0xFF8C8175,
-              ).withValues(alpha: .72),
-              RedactionStyle.pixelate => Colors.blueGrey.withValues(alpha: .72),
-              RedactionStyle.blackout => Colors.black.withValues(alpha: .88),
-            },
-            border: Border.all(
-              color: item.id == activeId
-                  ? const Color(0xFF6FFFC2)
-                  : Colors.white,
-              width: item.id == activeId ? 3 : 1.5,
-            ),
-          ),
-        ),
+        child: item.style == RedactionStyle.flowers
+            ? FlowerRedaction(
+                border: Border.all(
+                  color: item.id == activeId
+                      ? const Color(0xFF6FFFC2)
+                      : Colors.white,
+                  width: item.id == activeId ? 3 : 1.5,
+                ),
+              )
+            : DecoratedBox(
+                decoration: BoxDecoration(
+                  color: switch (item.style) {
+                    RedactionStyle.blur => const Color(
+                      0xFF8C8175,
+                    ).withValues(alpha: .72),
+                    RedactionStyle.pixelate => Colors.blueGrey.withValues(
+                      alpha: .72,
+                    ),
+                    RedactionStyle.blackout => Colors.black.withValues(
+                      alpha: .88,
+                    ),
+                    RedactionStyle.flowers => Colors.transparent,
+                  },
+                  border: Border.all(
+                    color: item.id == activeId
+                        ? const Color(0xFF6FFFC2)
+                        : Colors.white,
+                    width: item.id == activeId ? 3 : 1.5,
+                  ),
+                ),
+              ),
       ),
     );
   }
@@ -721,12 +747,14 @@ class _PdfEditorScreenState extends ConsumerState<PdfEditorScreen> {
   Widget _draftArea(ImageGeometry geometry, Rect bounds) => Positioned.fromRect(
     rect: geometry.toLocalRect(bounds),
     child: IgnorePointer(
-      child: Container(
-        decoration: BoxDecoration(
-          color: forest.withValues(alpha: .3),
-          border: Border.all(color: Colors.amber, width: 2.5),
-        ),
-      ),
+      child: style == RedactionStyle.flowers
+          ? FlowerRedaction(border: Border.all(color: Colors.amber, width: 2.5))
+          : DecoratedBox(
+              decoration: BoxDecoration(
+                color: forest.withValues(alpha: .3),
+                border: Border.all(color: Colors.amber, width: 2.5),
+              ),
+            ),
     ),
   );
 
@@ -909,6 +937,7 @@ class _PdfStrokePainter extends CustomPainter {
         RedactionStyle.blur => const Color(0xCC8C8175),
         RedactionStyle.pixelate => const Color(0xCC607D8B),
         RedactionStyle.blackout => Colors.black,
+        RedactionStyle.flowers => const Color(0xFFF7A9C4),
       };
     final path = Path()..moveTo(points.first.dx, points.first.dy);
     for (final point in points.skip(1)) {

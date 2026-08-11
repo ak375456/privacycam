@@ -16,7 +16,7 @@ enum RedactionCategory {
   manual,
 }
 
-enum RedactionStyle { blur, pixelate, blackout }
+enum RedactionStyle { blur, pixelate, blackout, flowers }
 
 enum RedactionSource { automatic, manual }
 
