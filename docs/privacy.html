@@ -37,7 +37,7 @@
         </ul>
         <div class="date-box">
           <strong>Effective date</strong>
-          <span>July 18, 2026</span>
+          <span>August 11, 2026</span>
         </div>
       </aside>
 
@@ -61,7 +61,8 @@
           <h2>3. Device permissions</h2>
           <p>PrivacyCam may request the following permissions only when needed:</p>
           <ul>
-            <li><strong>Camera:</strong> to take a photo inside PrivacyCam.</li>
+            <li><strong>Camera:</strong> to take a photo or record a video inside PrivacyCam.</li>
+            <li><strong>Microphone:</strong> to include sound only when you choose to record a video. Audio remains in the local working video unless you mute it before export; PrivacyCam does not send microphone audio to a developer-operated server.</li>
             <li><strong>Selected photos and videos:</strong> to open media you choose through the system picker.</li>
             <li><strong>Selected documents:</strong> to open PDF files you choose through the system document picker.</li>
             <li><strong>Add to photo library:</strong> to save an exported privacy-safe copy.</li>
@@ -87,13 +88,15 @@
         <section id="mlkit">
           <h2>5. On-device machine learning and limited diagnostics</h2>
           <p>PrivacyCam uses on-device components, including Google ML Kit for features such as face, text, QR-code, and barcode detection, plus an embedded number-plate model. Google states that ML Kit input data such as images and text, and the resulting detection output, are processed on-device and are not sent to Google servers.</p>
-          <p>Google also states that ML Kit sends limited performance and usage metrics to Google. Depending on platform and SDK version, these metrics may include device and application information, a per-installation identifier, performance data, API configuration such as image format or resolution, feature event types, and error codes. Google uses these metrics for diagnostics, analytics, maintenance, improvement, and abuse prevention. Google states this diagnostic data is encrypted in transit and is not transferred to third parties by ML Kit.</p>
+          <p>Google also states that the ML Kit SDK collects and sends limited performance and usage metrics to Google. Depending on platform and SDK version, these metrics may include device and application information, a per-installation identifier, performance data, API configuration such as image format or resolution, feature event types, and error codes. Google uses these metrics for diagnostics, usage analytics, maintenance, improvement, and abuse prevention. Google states this diagnostic data is encrypted in transit and is not transferred to third parties by ML Kit.</p>
+          <p>This limited SDK diagnostics collection is separate from PrivacyCam’s handling of your content. The developer does not receive these diagnostics, and ML Kit does not send your photos, videos, PDF pages, recognized text, face locations, or other detection results to Google. Although the developer does not collect your content or these diagnostics, collection performed directly by the third-party ML Kit SDK must be considered separately in the relevant app-store privacy disclosures.</p>
           <p>These diagnostics are handled by Google under the <a href="https://policies.google.com/privacy" rel="noopener noreferrer">Google Privacy Policy</a>. Learn more in Google’s <a href="https://developers.google.com/ml-kit/terms" rel="noopener noreferrer">ML Kit Terms &amp; Privacy disclosure</a>.</p>
         </section>
 
         <section id="purchases">
           <h2>6. Purchases</h2>
           <p>The optional PrivacyCam Pro lifetime purchase is processed by Apple through the App Store or by Google through Google Play. We do not receive or store your full payment-card details. The App receives product information, transaction status, and store verification data so it can unlock Pro access. A local entitlement flag may also be stored on your device.</p>
+          <p>On Android, the App declares the Google Play <code>com.android.vending.BILLING</code> permission solely to connect to Google Play Billing, display available products, complete a purchase you initiate, and restore purchase status. It does not give PrivacyCam access to your full payment-card details.</p>
           <p>Apple and Google handle purchase information under their own privacy policies and store terms.</p>
         </section>
 
