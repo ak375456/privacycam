@@ -9,10 +9,11 @@ import '../../domain/models.dart';
 import '../../state/providers.dart';
 import '../widgets/adaptive_ui.dart';
 import '../widgets/batch_strip.dart';
-import '../widgets/flower_redaction.dart';
 import '../widgets/image_geometry.dart';
 import '../widgets/new_image_action.dart';
 import '../widgets/privacy_loader.dart';
+import '../widgets/redaction_style_picker.dart';
+import '../widgets/sticker_redaction.dart';
 
 class EditorScreen extends ConsumerStatefulWidget {
   const EditorScreen({super.key});
@@ -230,17 +231,8 @@ class _EditorState extends ConsumerState<EditorScreen> {
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: AdaptiveSegmentedControl<RedactionStyle>(
+                child: RedactionStylePicker(
                   value: style,
-                  children: {
-                    for (final value in RedactionStyle.values)
-                      value: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        child: Text(
-                          value.name[0].toUpperCase() + value.name.substring(1),
-                        ),
-                      ),
-                  },
                   onChanged: (value) {
                     setState(() => style = value);
                     ref.read(sessionProvider.notifier).setAllStyle(value);
@@ -414,8 +406,9 @@ class _EditorState extends ConsumerState<EditorScreen> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            if (item.style == RedactionStyle.flowers)
-              FlowerRedaction(
+            if (_isSticker(item.style))
+              StickerRedaction(
+                style: item.style,
                 border: Border.all(
                   color: showHandles ? Colors.amber : Colors.white,
                   width: showHandles ? 3 : 2,
@@ -430,6 +423,7 @@ class _EditorState extends ConsumerState<EditorScreen> {
                     RedactionStyle.pixelate => Colors.blueGrey.withValues(
                       alpha: .75,
                     ),
+                    RedactionStyle.emoji => Colors.transparent,
                     RedactionStyle.flowers => Colors.transparent,
                   },
                   border: Border.all(
@@ -459,8 +453,9 @@ class _EditorState extends ConsumerState<EditorScreen> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            if (style == RedactionStyle.flowers)
-              FlowerRedaction(
+            if (_isSticker(style))
+              StickerRedaction(
+                style: style,
                 border: Border.all(color: Colors.amber, width: 2.5),
               )
             else
@@ -474,6 +469,7 @@ class _EditorState extends ConsumerState<EditorScreen> {
                     RedactionStyle.blackout => Colors.black.withValues(
                       alpha: .42,
                     ),
+                    RedactionStyle.emoji => Colors.transparent,
                     RedactionStyle.flowers => Colors.transparent,
                   },
                   border: Border.all(color: Colors.amber, width: 2.5),
@@ -601,6 +597,11 @@ class _EditorState extends ConsumerState<EditorScreen> {
           icon: Icons.crop_square,
         ),
         AdaptiveAction(
+          label: 'Use emoji',
+          value: _ItemMenuChoice.emoji,
+          icon: Icons.favorite_outline,
+        ),
+        AdaptiveAction(
           label: 'Use flowers',
           value: _ItemMenuChoice.flowers,
           icon: Icons.local_florist_outlined,
@@ -622,6 +623,8 @@ class _EditorState extends ConsumerState<EditorScreen> {
         notifier.setStyle(item.id, RedactionStyle.pixelate);
       case _ItemMenuChoice.blackout:
         notifier.setStyle(item.id, RedactionStyle.blackout);
+      case _ItemMenuChoice.emoji:
+        notifier.setStyle(item.id, RedactionStyle.emoji);
       case _ItemMenuChoice.flowers:
         notifier.setStyle(item.id, RedactionStyle.flowers);
       case _ItemMenuChoice.delete:
@@ -642,6 +645,7 @@ class _StrokePainter extends CustomPainter {
         RedactionStyle.blur => forest.withValues(alpha: .7),
         RedactionStyle.pixelate => Colors.blueGrey,
         RedactionStyle.blackout => Colors.black,
+        RedactionStyle.emoji => const Color(0xFFFFC928),
         RedactionStyle.flowers => const Color(0xFFF7A9C4),
       }
       ..strokeCap = StrokeCap.round
@@ -665,7 +669,10 @@ class _StrokePainter extends CustomPainter {
 
 enum _RectHandle { move, topLeft, topRight, bottomLeft, bottomRight }
 
-enum _ItemMenuChoice { blur, pixelate, blackout, flowers, delete }
+bool _isSticker(RedactionStyle style) =>
+    style == RedactionStyle.emoji || style == RedactionStyle.flowers;
+
+enum _ItemMenuChoice { blur, pixelate, blackout, emoji, flowers, delete }
 
 class _CornerHandle extends StatelessWidget {
   const _CornerHandle({required this.alignment});

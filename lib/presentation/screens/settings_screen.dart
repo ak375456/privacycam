@@ -170,7 +170,7 @@ class SettingsScreen extends ConsumerWidget {
                     labelText: 'Default face style',
                   ),
                   items: RedactionStyle.values
-                      .where((style) => style != RedactionStyle.flowers)
+                      .where(_isAutomaticStyle)
                       .map(
                         (e) => DropdownMenuItem(value: e, child: Text(e.name)),
                       )
@@ -184,7 +184,7 @@ class SettingsScreen extends ConsumerWidget {
                     labelText: 'Default people style',
                   ),
                   items: RedactionStyle.values
-                      .where((style) => style != RedactionStyle.flowers)
+                      .where(_isAutomaticStyle)
                       .map(
                         (e) => DropdownMenuItem(value: e, child: Text(e.name)),
                       )
@@ -198,7 +198,7 @@ class SettingsScreen extends ConsumerWidget {
                     labelText: 'Default sensitive-text style',
                   ),
                   items: RedactionStyle.values
-                      .where((style) => style != RedactionStyle.flowers)
+                      .where(_isAutomaticStyle)
                       .map(
                         (e) => DropdownMenuItem(value: e, child: Text(e.name)),
                       )
@@ -545,7 +545,7 @@ class SettingsScreen extends ConsumerWidget {
     message: 'Currently ${_styleLabel(current)}',
     actions: [
       for (final style in RedactionStyle.values)
-        if (style != RedactionStyle.flowers)
+        if (_isAutomaticStyle(style))
           AdaptiveAction(label: _styleLabel(style), value: style),
     ],
   );
@@ -575,3 +575,6 @@ class SettingsScreen extends ConsumerWidget {
     }
   }
 }
+
+bool _isAutomaticStyle(RedactionStyle style) =>
+    style != RedactionStyle.emoji && style != RedactionStyle.flowers;

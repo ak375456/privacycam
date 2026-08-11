@@ -54,6 +54,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('Zoom'), findsNothing);
+    expect(find.text('Emoji'), findsOneWidget);
     expect(find.text('Flowers'), findsOneWidget);
     expect(find.byIcon(Icons.pinch_rounded), findsOneWidget);
     var viewer = tester.widget<InteractiveViewer>(

@@ -13,6 +13,7 @@ import '../../state/pdf_providers.dart';
 import '../../state/providers.dart';
 import '../widgets/adaptive_ui.dart';
 import '../widgets/privacy_loader.dart';
+import '../widgets/redaction_style_picker.dart';
 
 class PdfExportScreen extends ConsumerStatefulWidget {
   const PdfExportScreen({super.key});
@@ -41,7 +42,9 @@ class _PdfExportScreenState extends ConsumerState<PdfExportScreen> {
         .where((item) => item.selected)
         .toList();
     if (selected != null && selected.isNotEmpty) {
-      effect = selected.any((item) => item.style == RedactionStyle.flowers)
+      effect = selected.any((item) => item.style == RedactionStyle.emoji)
+          ? RedactionStyle.emoji
+          : selected.any((item) => item.style == RedactionStyle.flowers)
           ? RedactionStyle.flowers
           : selected.any((item) => item.style == RedactionStyle.blur)
           ? RedactionStyle.blur
@@ -296,41 +299,13 @@ class _PdfExportScreenState extends ConsumerState<PdfExportScreen> {
       ),
       child: Column(
         children: [
-          AdaptiveSegmentedControl<RedactionStyle>(
+          RedactionStylePicker(
             value: effect,
-            children: const {
-              RedactionStyle.blur: Padding(
-                padding: EdgeInsets.symmetric(horizontal: 7),
-                child: Text('Blur'),
-              ),
-              RedactionStyle.pixelate: Padding(
-                padding: EdgeInsets.symmetric(horizontal: 7),
-                child: Text('Pixelate'),
-              ),
-              RedactionStyle.blackout: Padding(
-                padding: EdgeInsets.symmetric(horizontal: 7),
-                child: Text('Blackout'),
-              ),
-              RedactionStyle.flowers: Padding(
-                padding: EdgeInsets.symmetric(horizontal: 6),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.local_florist_outlined, size: 16),
-                    SizedBox(width: 3),
-                    Text('Flowers'),
-                  ],
-                ),
-              ),
+            enabled: !busy,
+            onChanged: (next) {
+              setState(() => effect = next);
+              ref.read(pdfSessionProvider.notifier).setDocumentStyle(next);
             },
-            onChanged: busy
-                ? (_) {}
-                : (next) {
-                    setState(() => effect = next);
-                    ref
-                        .read(pdfSessionProvider.notifier)
-                        .setDocumentStyle(next);
-                  },
           ),
           if (showSlider) ...[
             const SizedBox(height: 5),

@@ -178,8 +178,15 @@ class ExportService {
     final y = item.bounds.top.floor().clamp(0, image.height - 1);
     final w = item.bounds.width.ceil().clamp(1, image.width - x);
     final h = item.bounds.height.ceil().clamp(1, image.height - y);
-    if (item.style == RedactionStyle.flowers) {
-      _drawFlowerCover(image, x: x, y: y, width: w, height: h);
+    if (_isSticker(item.style)) {
+      _drawStickerCover(
+        image,
+        style: item.style,
+        x: x,
+        y: y,
+        width: w,
+        height: h,
+      );
       return image;
     }
     if (item.style == RedactionStyle.blackout) {
@@ -274,17 +281,21 @@ class ExportService {
     double renderScale,
   ) {
     if (stroke.points.isEmpty) return image;
-    if (stroke.style == RedactionStyle.flowers) {
-      _drawStroke(image, stroke, img.ColorRgba8(247, 217, 229, 255));
-      final radius = max(2, (stroke.size / 5).round());
+    if (_isSticker(stroke.style)) {
+      final base = stroke.style == RedactionStyle.emoji
+          ? img.ColorRgba8(255, 201, 40, 255)
+          : img.ColorRgba8(231, 84, 128, 255);
+      _drawStroke(image, stroke, base);
+      final stickerSize = max(10, stroke.size.round());
       final step = max(1, (stroke.points.length / 24).ceil());
       for (var i = 0; i < stroke.points.length; i += step) {
         final point = stroke.points[i];
-        _drawFlower(
+        _drawSticker(
           image,
+          stroke.style,
           point.dx.round(),
           point.dy.round(),
-          radius,
+          stickerSize,
           alternate: (i ~/ step).isOdd,
         );
       }
@@ -386,31 +397,85 @@ class ExportService {
     }
   }
 
-  void _drawFlowerCover(
+  void _drawStickerCover(
     img.Image image, {
+    required RedactionStyle style,
     required int x,
     required int y,
     required int width,
     required int height,
   }) {
-    img.fillRect(
-      image,
-      x1: x,
-      y1: y,
-      x2: x + width - 1,
-      y2: y + height - 1,
-      color: img.ColorRgba8(247, 217, 229, 255),
-    );
-    final spacing = min(72, max(14, (height * .72).round()));
-    final radius = max(2, (spacing * .2).round());
-    var row = 0;
-    for (var cy = y + spacing ~/ 2; cy < y + height; cy += spacing) {
-      final start = row.isEven ? spacing ~/ 2 : 0;
-      for (var cx = x + start; cx < x + width; cx += spacing) {
-        _drawFlower(image, cx, cy, radius, alternate: row.isOdd);
-      }
-      row++;
+    final stickerSize = min(
+      height * .94,
+      width.toDouble(),
+    ).round().clamp(8, max(8, max(width, height))).toInt();
+    final count = width <= stickerSize * 1.35
+        ? 1
+        : max(1, (width / max(1, stickerSize * .82)).ceil());
+    final spacing = width / count;
+    for (var i = 0; i < count; i++) {
+      _drawSticker(
+        image,
+        style,
+        (x + spacing * (i + .5)).round(),
+        y + height ~/ 2,
+        stickerSize,
+        alternate: i.isOdd,
+      );
     }
+  }
+
+  void _drawSticker(
+    img.Image image,
+    RedactionStyle style,
+    int centerX,
+    int centerY,
+    int size, {
+    required bool alternate,
+  }) {
+    if (style == RedactionStyle.emoji) {
+      _drawHeart(image, centerX, centerY, size);
+    } else {
+      _drawFlower(
+        image,
+        centerX,
+        centerY,
+        max(2, (size * .25).round()),
+        alternate: alternate,
+      );
+    }
+  }
+
+  void _drawHeart(img.Image image, int centerX, int centerY, int size) {
+    final color = img.ColorRgba8(255, 201, 40, 255);
+    final radius = max(2, (size * .24).round());
+    final topY = centerY - (size * .16).round();
+    final offset = (radius * .82).round();
+    img.drawCircle(
+      image,
+      x: centerX - offset,
+      y: topY,
+      radius: radius,
+      color: color,
+      antialias: true,
+    );
+    img.drawCircle(
+      image,
+      x: centerX + offset,
+      y: topY,
+      radius: radius,
+      color: color,
+      antialias: true,
+    );
+    img.fillPolygon(
+      image,
+      vertices: [
+        img.Point(centerX - (size * .44).round(), topY),
+        img.Point(centerX + (size * .44).round(), topY),
+        img.Point(centerX, centerY + (size * .44).round()),
+      ],
+      color: color,
+    );
   }
 
   void _drawFlower(
@@ -453,6 +518,9 @@ class ExportService {
       antialias: true,
     );
   }
+
+  bool _isSticker(RedactionStyle style) =>
+      style == RedactionStyle.emoji || style == RedactionStyle.flowers;
 
   Future<bool> verifyMetadataRemoved(String path) async {
     final decoded = img.decodeImage(await File(path).readAsBytes());

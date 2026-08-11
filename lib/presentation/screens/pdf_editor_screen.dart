@@ -10,8 +10,9 @@ import '../../core/theme.dart';
 import '../../domain/models.dart';
 import '../../state/pdf_providers.dart';
 import '../widgets/adaptive_ui.dart';
-import '../widgets/flower_redaction.dart';
 import '../widgets/image_geometry.dart';
+import '../widgets/redaction_style_picker.dart';
+import '../widgets/sticker_redaction.dart';
 
 class PdfEditorScreen extends ConsumerStatefulWidget {
   const PdfEditorScreen({super.key});
@@ -285,33 +286,8 @@ class _PdfEditorScreenState extends ConsumerState<PdfEditorScreen> {
     );
   }
 
-  Widget _styleControl() => AdaptiveSegmentedControl<RedactionStyle>(
+  Widget _styleControl() => RedactionStylePicker(
     value: style,
-    children: const {
-      RedactionStyle.blur: Padding(
-        padding: EdgeInsets.symmetric(horizontal: 10),
-        child: Text('Blur'),
-      ),
-      RedactionStyle.pixelate: Padding(
-        padding: EdgeInsets.symmetric(horizontal: 10),
-        child: Text('Pixelate'),
-      ),
-      RedactionStyle.blackout: Padding(
-        padding: EdgeInsets.symmetric(horizontal: 10),
-        child: Text('Blackout'),
-      ),
-      RedactionStyle.flowers: Padding(
-        padding: EdgeInsets.symmetric(horizontal: 8),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.local_florist_outlined, size: 16),
-            SizedBox(width: 3),
-            Text('Flowers'),
-          ],
-        ),
-      ),
-    },
     onChanged: (value) {
       setState(() => style = value);
       ref.read(pdfSessionProvider.notifier).setAllStyle(value);
@@ -709,8 +685,9 @@ class _PdfEditorScreenState extends ConsumerState<PdfEditorScreen> {
     return Positioned.fromRect(
       rect: geometry.toLocalRect(bounds),
       child: IgnorePointer(
-        child: item.style == RedactionStyle.flowers
-            ? FlowerRedaction(
+        child: _isSticker(item.style)
+            ? StickerRedaction(
+                style: item.style,
                 border: Border.all(
                   color: item.id == activeId
                       ? const Color(0xFF6FFFC2)
@@ -730,6 +707,7 @@ class _PdfEditorScreenState extends ConsumerState<PdfEditorScreen> {
                     RedactionStyle.blackout => Colors.black.withValues(
                       alpha: .88,
                     ),
+                    RedactionStyle.emoji => Colors.transparent,
                     RedactionStyle.flowers => Colors.transparent,
                   },
                   border: Border.all(
@@ -747,8 +725,11 @@ class _PdfEditorScreenState extends ConsumerState<PdfEditorScreen> {
   Widget _draftArea(ImageGeometry geometry, Rect bounds) => Positioned.fromRect(
     rect: geometry.toLocalRect(bounds),
     child: IgnorePointer(
-      child: style == RedactionStyle.flowers
-          ? FlowerRedaction(border: Border.all(color: Colors.amber, width: 2.5))
+      child: _isSticker(style)
+          ? StickerRedaction(
+              style: style,
+              border: Border.all(color: Colors.amber, width: 2.5),
+            )
           : DecoratedBox(
               decoration: BoxDecoration(
                 color: forest.withValues(alpha: .3),
@@ -886,6 +867,9 @@ class _ToolHint extends StatelessWidget {
   );
 }
 
+bool _isSticker(RedactionStyle style) =>
+    style == RedactionStyle.emoji || style == RedactionStyle.flowers;
+
 class _EditorPageStrip extends StatelessWidget {
   const _EditorPageStrip({
     required this.count,
@@ -937,6 +921,7 @@ class _PdfStrokePainter extends CustomPainter {
         RedactionStyle.blur => const Color(0xCC8C8175),
         RedactionStyle.pixelate => const Color(0xCC607D8B),
         RedactionStyle.blackout => Colors.black,
+        RedactionStyle.emoji => const Color(0xFFFFC928),
         RedactionStyle.flowers => const Color(0xFFF7A9C4),
       };
     final path = Path()..moveTo(points.first.dx, points.first.dy);

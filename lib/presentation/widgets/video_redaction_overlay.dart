@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme.dart';
 import '../../domain/models.dart';
 import '../../domain/video_models.dart';
-import 'flower_redaction.dart';
+import 'sticker_redaction.dart';
 
 class VideoRedactionOverlay extends StatelessWidget {
   const VideoRedactionOverlay({
@@ -112,6 +112,7 @@ class _Region extends StatelessWidget {
             ),
             RedactionStyle.pixelate => _pixelFilter(),
             RedactionStyle.blackout => null,
+            RedactionStyle.emoji => null,
             RedactionStyle.flowers => null,
           };
     return Positioned.fromRect(
@@ -124,8 +125,9 @@ class _Region extends StatelessWidget {
             ClipRect(
               child: !enabled
                   ? const ColoredBox(color: Colors.transparent)
-                  : style == RedactionStyle.flowers
-                  ? const FlowerRedaction()
+                  : style == RedactionStyle.emoji ||
+                        style == RedactionStyle.flowers
+                  ? StickerRedaction(style: style)
                   : filter == null
                   ? const ColoredBox(color: Colors.black)
                   : BackdropFilter(
