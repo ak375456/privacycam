@@ -10,6 +10,7 @@ import '../../domain/models.dart';
 import '../../state/pdf_providers.dart';
 import '../widgets/adaptive_ui.dart';
 import '../widgets/image_geometry.dart';
+import '../widgets/pdf_review_outline.dart';
 
 class PdfReviewScreen extends ConsumerWidget {
   const PdfReviewScreen({super.key});
@@ -96,7 +97,7 @@ class PdfReviewScreen extends ConsumerWidget {
                   const Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
-                      'Review outlines stay transparent so you can read the original text.',
+                      'Ordinary text outlines appear as you zoom in, keeping the page readable.',
                       style: TextStyle(fontSize: 12, color: Colors.black54),
                     ),
                   ),
@@ -275,22 +276,38 @@ class _ReviewCanvasState extends State<_ReviewCanvas> {
                     onDoubleTap: _toggleZoom,
                     onTapUp: (details) =>
                         _toggleNearest(geometry, details.localPosition),
-                    child: Stack(
-                      children: [
-                        Positioned(
-                          left: geometry.origin.dx,
-                          top: geometry.origin.dy,
-                          width: geometry.displayed.width,
-                          height: geometry.displayed.height,
-                          child: Image.file(
-                            File(widget.image.sourcePath),
-                            fit: BoxFit.fill,
-                            filterQuality: FilterQuality.high,
-                          ),
-                        ),
-                        for (final item in widget.image.items)
-                          _DetectionBox(geometry: geometry, item: item),
-                      ],
+                    child: AnimatedBuilder(
+                      animation: _controller,
+                      builder: (context, _) {
+                        final viewerScale = _controller.value
+                            .getMaxScaleOnAxis()
+                            .clamp(1.0, 8.0);
+                        return Stack(
+                          children: [
+                            Positioned(
+                              left: geometry.origin.dx,
+                              top: geometry.origin.dy,
+                              width: geometry.displayed.width,
+                              height: geometry.displayed.height,
+                              child: Image.file(
+                                File(widget.image.sourcePath),
+                                fit: BoxFit.fill,
+                                filterQuality: FilterQuality.high,
+                              ),
+                            ),
+                            for (final item in widget.image.items)
+                              if (PdfReviewOutlineLayout.isVisible(
+                                item,
+                                viewerScale,
+                              ))
+                                _DetectionBox(
+                                  geometry: geometry,
+                                  item: item,
+                                  viewerScale: viewerScale,
+                                ),
+                          ],
+                        );
+                      },
                     ),
                   ),
                 ),
@@ -299,39 +316,23 @@ class _ReviewCanvasState extends State<_ReviewCanvas> {
             Positioned(
               top: 8,
               right: 8,
-              child: Material(
-                color: const Color(0xE61B211F),
-                borderRadius: BorderRadius.circular(22),
-                child: Padding(
-                  padding: const EdgeInsets.only(left: 10),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
+              child: Semantics(
+                label: 'Pinch to zoom',
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: const Color(0xD91B211F),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white24),
+                    ),
+                    child: const SizedBox.square(
+                      dimension: 38,
+                      child: Icon(
                         Icons.pinch_rounded,
-                        size: 17,
+                        size: 20,
                         color: Colors.white,
                       ),
-                      const SizedBox(width: 5),
-                      const Text(
-                        'Pinch or double-tap',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: 'Reset zoom',
-                        visualDensity: VisualDensity.compact,
-                        onPressed: _resetZoom,
-                        icon: const Icon(
-                          Icons.fit_screen_rounded,
-                          size: 19,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -365,7 +366,13 @@ class _ReviewCanvasState extends State<_ReviewCanvas> {
     final scale = _controller.value.getMaxScaleOnAxis().clamp(1.0, 8.0);
     final imagePadding = 25 / (geometry.factor * scale);
     final exact =
-        widget.image.items.where((item) => item.bounds.contains(point)).toList()
+        widget.image.items
+            .where(
+              (item) =>
+                  PdfReviewOutlineLayout.isVisible(item, scale) &&
+                  item.bounds.contains(point),
+            )
+            .toList()
           ..sort((a, b) => _area(a.bounds).compareTo(_area(b.bounds)));
     if (exact.isNotEmpty) {
       widget.onToggle(exact.first.id);
@@ -373,7 +380,11 @@ class _ReviewCanvasState extends State<_ReviewCanvas> {
     }
     final nearby =
         widget.image.items
-            .where((item) => item.bounds.inflate(imagePadding).contains(point))
+            .where(
+              (item) =>
+                  PdfReviewOutlineLayout.isVisible(item, scale) &&
+                  item.bounds.inflate(imagePadding).contains(point),
+            )
             .toList()
           ..sort((a, b) {
             final distance = _distanceToRect(
@@ -405,23 +416,29 @@ class _ReviewCanvasState extends State<_ReviewCanvas> {
 }
 
 class _DetectionBox extends StatelessWidget {
-  const _DetectionBox({required this.geometry, required this.item});
+  const _DetectionBox({
+    required this.geometry,
+    required this.item,
+    required this.viewerScale,
+  });
 
   final ImageGeometry geometry;
   final RedactionItem item;
+  final double viewerScale;
 
   @override
   Widget build(BuildContext context) => Positioned.fromRect(
-    rect: geometry.toLocalRect(item.bounds),
+    rect: PdfReviewOutlineLayout.rectFor(geometry, item, viewerScale),
     child: IgnorePointer(
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: Colors.transparent,
+          borderRadius: BorderRadius.circular(2 / viewerScale),
           border: Border.all(
             color: item.selected
                 ? const Color(0xFF008866)
-                : const Color(0xFFD58A00),
-            width: item.selected ? 2.5 : 1.6,
+                : const Color(0xFFB96F00),
+            width: PdfReviewOutlineLayout.strokeWidth(item, viewerScale),
           ),
         ),
       ),
