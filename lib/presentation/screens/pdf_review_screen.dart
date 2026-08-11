@@ -88,7 +88,7 @@ class PdfReviewScreen extends ConsumerWidget {
                         const _ReviewLegend(
                           color: Color(0xFFD58A00),
                           icon: Icons.add_rounded,
-                          label: 'Tap an outline to hide it',
+                          label: 'Tap text or an outline to hide it',
                         ),
                       ],
                     ),
@@ -97,7 +97,7 @@ class PdfReviewScreen extends ConsumerWidget {
                   const Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
-                      'Ordinary text outlines appear as you zoom in, keeping the page readable.',
+                      'Tap text directly at any zoom. Ordinary text outlines appear when you zoom in.',
                       style: TextStyle(fontSize: 12, color: Colors.black54),
                     ),
                   ),
@@ -366,13 +366,7 @@ class _ReviewCanvasState extends State<_ReviewCanvas> {
     final scale = _controller.value.getMaxScaleOnAxis().clamp(1.0, 8.0);
     final imagePadding = 25 / (geometry.factor * scale);
     final exact =
-        widget.image.items
-            .where(
-              (item) =>
-                  PdfReviewOutlineLayout.isVisible(item, scale) &&
-                  item.bounds.contains(point),
-            )
-            .toList()
+        widget.image.items.where((item) => item.bounds.contains(point)).toList()
           ..sort((a, b) => _area(a.bounds).compareTo(_area(b.bounds)));
     if (exact.isNotEmpty) {
       widget.onToggle(exact.first.id);
@@ -380,11 +374,7 @@ class _ReviewCanvasState extends State<_ReviewCanvas> {
     }
     final nearby =
         widget.image.items
-            .where(
-              (item) =>
-                  PdfReviewOutlineLayout.isVisible(item, scale) &&
-                  item.bounds.inflate(imagePadding).contains(point),
-            )
+            .where((item) => item.bounds.inflate(imagePadding).contains(point))
             .toList()
           ..sort((a, b) {
             final distance = _distanceToRect(
