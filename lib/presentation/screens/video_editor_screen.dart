@@ -15,12 +15,16 @@ import '../../domain/video_models.dart';
 import '../../state/providers.dart';
 import '../../state/video_providers.dart';
 import '../widgets/adaptive_ui.dart';
+import '../widgets/redaction_style_picker.dart';
 import '../widgets/video_redaction_overlay.dart';
 import '../widgets/video_timeline_editor.dart';
 
 enum _VideoTool { select, rectangle }
 
 enum _TrackRange { wholeVideo, fromHere, aroundHere }
+
+bool _hasStrength(RedactionStyle style) =>
+    style == RedactionStyle.blur || style == RedactionStyle.pixelate;
 
 class VideoEditorScreen extends ConsumerStatefulWidget {
   const VideoEditorScreen({super.key});
@@ -477,16 +481,11 @@ class _VideoEditorScreenState extends ConsumerState<VideoEditorScreen> {
         style: TextStyle(fontSize: 12, height: 1.35, color: Color(0xFF52615D)),
       ),
       const SizedBox(height: 10),
-      AdaptiveSegmentedControl<RedactionStyle>(
+      RedactionStylePicker(
         value: _style,
         onChanged: (value) => setState(() => _style = value),
-        children: const {
-          RedactionStyle.blur: Text('Blur'),
-          RedactionStyle.pixelate: Text('Pixelate'),
-          RedactionStyle.blackout: Text('Blackout'),
-        },
       ),
-      if (_style != RedactionStyle.blackout) ...[
+      if (_hasStrength(_style)) ...[
         const SizedBox(height: 9),
         _effectStrengthControl(_style, settings),
       ],
@@ -524,18 +523,13 @@ class _VideoEditorScreenState extends ConsumerState<VideoEditorScreen> {
         ),
       ),
       const SizedBox(height: 9),
-      AdaptiveSegmentedControl<RedactionStyle>(
+      RedactionStylePicker(
         value: track.style,
         onChanged: (value) => ref
             .read(videoEditorProvider.notifier)
             .setTrackStyle(track.id, value),
-        children: const {
-          RedactionStyle.blur: Text('Blur'),
-          RedactionStyle.pixelate: Text('Pixelate'),
-          RedactionStyle.blackout: Text('Blackout'),
-        },
       ),
-      if (track.style != RedactionStyle.blackout) ...[
+      if (_hasStrength(track.style)) ...[
         const SizedBox(height: 9),
         _effectStrengthControl(track.style, settings),
       ],

@@ -194,6 +194,8 @@ private final class PrivacyCamVideoPlugin: NSObject, FlutterPlugin {
     } catch {
       return fail(result, "edit_failed", "PrivacyCam could not apply the selected video cuts.")
     }
+    let stickerCache = NSCache<NSString, CIImage>()
+    stickerCache.countLimit = 48
     let composition = AVVideoComposition(asset: asset) { request in
       let timeMs = Int64(CMTimeGetSeconds(request.compositionTime) * 1000)
       var image = request.sourceImage
@@ -220,6 +222,12 @@ private final class PrivacyCamVideoPlugin: NSObject, FlutterPlugin {
             kCIInputScaleKey: max(10, pixelSize * max(1, extent.width / 1080)),
             kCIInputCenterKey: CIVector(x: rect.midX, y: rect.midY),
           ]).cropped(to: rect)
+        case "emoji", "flowers":
+          effect = self.stickerImage(
+            style: track.style,
+            rect: rect,
+            cache: stickerCache
+          )
         default:
           effect = CIImage(color: .black).cropped(to: rect)
         }
@@ -271,6 +279,117 @@ private final class PrivacyCamVideoPlugin: NSObject, FlutterPlugin {
         )
       }
     }
+  }
+
+  private func stickerImage(
+    style: String,
+    rect: CGRect,
+    cache: NSCache<NSString, CIImage>
+  ) -> CIImage {
+    let width = min(512, max(48, (rect.width / 16).rounded() * 16))
+    let height = min(512, max(48, (rect.height / 16).rounded() * 16))
+    let key = "\(style)_\(Int(width))_\(Int(height))" as NSString
+    let base: CIImage
+    if let cached = cache.object(forKey: key) {
+      base = cached
+    } else {
+      let size = CGSize(width: width, height: height)
+      let rendered = UIGraphicsImageRenderer(size: size).image { context in
+        context.cgContext.setShadow(
+          offset: CGSize(width: 0, height: max(1, height * 0.025)),
+          blur: max(1, height * 0.035),
+          color: UIColor.black.withAlphaComponent(0.35).cgColor
+        )
+        let stickerSize = min(height * 0.94, width)
+        let count = width <= stickerSize * 1.35
+          ? 1
+          : max(1, Int(ceil(width / max(1, stickerSize * 0.82))))
+        let spacing = width / CGFloat(count)
+        for index in 0..<count {
+          let center = CGPoint(
+            x: spacing * (CGFloat(index) + 0.5),
+            y: height / 2
+          )
+          if style == "emoji" {
+            self.drawHeart(center: center, size: stickerSize)
+          } else {
+            self.drawFlower(center: center, size: stickerSize, alternate: index.isMultiple(of: 2))
+          }
+        }
+      }
+      base = CIImage(image: rendered) ?? CIImage(color: .black).cropped(
+        to: CGRect(origin: .zero, size: size)
+      )
+      cache.setObject(base, forKey: key)
+    }
+    return base
+      .transformed(by: CGAffineTransform(
+        scaleX: rect.width / max(1, base.extent.width),
+        y: rect.height / max(1, base.extent.height)
+      ))
+      .transformed(by: CGAffineTransform(translationX: rect.minX, y: rect.minY))
+      .cropped(to: rect)
+  }
+
+  private func drawHeart(center: CGPoint, size: CGFloat) {
+    let top = center.y - size * 0.35
+    let path = UIBezierPath()
+    path.move(to: CGPoint(x: center.x, y: center.y + size * 0.42))
+    path.addCurve(
+      to: CGPoint(x: center.x - size * 0.22, y: top),
+      controlPoint1: CGPoint(x: center.x - size * 0.58, y: center.y + size * 0.08),
+      controlPoint2: CGPoint(x: center.x - size * 0.48, y: top)
+    )
+    path.addCurve(
+      to: CGPoint(x: center.x, y: top + size * 0.13),
+      controlPoint1: CGPoint(x: center.x - size * 0.07, y: top),
+      controlPoint2: CGPoint(x: center.x, y: top + size * 0.13)
+    )
+    path.addCurve(
+      to: CGPoint(x: center.x + size * 0.22, y: top),
+      controlPoint1: CGPoint(x: center.x, y: top + size * 0.13),
+      controlPoint2: CGPoint(x: center.x + size * 0.07, y: top)
+    )
+    path.addCurve(
+      to: CGPoint(x: center.x, y: center.y + size * 0.42),
+      controlPoint1: CGPoint(x: center.x + size * 0.48, y: top),
+      controlPoint2: CGPoint(x: center.x + size * 0.58, y: center.y + size * 0.08)
+    )
+    path.close()
+    UIColor(red: 1, green: 0.79, blue: 0.16, alpha: 1).setFill()
+    path.fill()
+  }
+
+  private func drawFlower(center: CGPoint, size: CGFloat, alternate: Bool) {
+    let radius = size * 0.25
+    let petal = alternate
+      ? UIColor(red: 1, green: 0.35, blue: 0.12, alpha: 1)
+      : UIColor(red: 0.91, green: 0.33, blue: 0.50, alpha: 1)
+    petal.setFill()
+    for index in 0..<6 {
+      let angle = CGFloat(index) * .pi / 3
+      let point = CGPoint(
+        x: center.x + cos(angle) * radius,
+        y: center.y + sin(angle) * radius
+      )
+      UIBezierPath(
+        ovalIn: CGRect(
+          x: point.x - radius * 0.88,
+          y: point.y - radius * 0.88,
+          width: radius * 1.76,
+          height: radius * 1.76
+        )
+      ).fill()
+    }
+    UIColor(red: 1, green: 0.89, blue: 0.64, alpha: 1).setFill()
+    UIBezierPath(
+      ovalIn: CGRect(
+        x: center.x - radius * 0.74,
+        y: center.y - radius * 0.74,
+        width: radius * 1.48,
+        height: radius * 1.48
+      )
+    ).fill()
   }
 
   private func editedAsset(

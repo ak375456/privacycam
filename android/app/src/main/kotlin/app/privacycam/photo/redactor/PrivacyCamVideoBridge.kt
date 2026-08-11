@@ -517,8 +517,8 @@ private class VideoRedactionShaderProgram(
                     "blur" -> if (bounds == null) 0f else 1f
                     "pixelate" -> if (bounds == null) 0f else 2f
                     "blackout" -> if (bounds == null) 0f else 3f
-                    "emoji" -> if (bounds == null) 0f else 3f
-                    "flowers" -> if (bounds == null) 0f else 3f
+                    "emoji" -> if (bounds == null) 0f else 4f
+                    "flowers" -> if (bounds == null) 0f else 5f
                     else -> 0f
                 })
                 val secureMinimum = when (track?.category) {
@@ -578,7 +578,28 @@ private class VideoRedactionShaderProgram(
             bool insideRect(vec2 p, vec4 r) {
               return p.x >= r.x && p.y >= r.y && p.x <= r.z && p.y <= r.w;
             }
-            vec4 privacyColor(float style, float blockSize) {
+            vec4 privacyColor(float style, float blockSize, vec4 rect, vec4 baseColor) {
+              vec2 local = (vMaskCoord - rect.xy) / max(vec2(0.0001), rect.zw - rect.xy);
+              vec2 p = (local - 0.5) * 2.0;
+              if (style > 4.5) {
+                float petal = 0.0;
+                petal = max(petal, 1.0 - step(0.30, length(p - vec2(0.00, -0.30))));
+                petal = max(petal, 1.0 - step(0.30, length(p - vec2(0.26, -0.15))));
+                petal = max(petal, 1.0 - step(0.30, length(p - vec2(0.26, 0.15))));
+                petal = max(petal, 1.0 - step(0.30, length(p - vec2(0.00, 0.30))));
+                petal = max(petal, 1.0 - step(0.30, length(p - vec2(-0.26, 0.15))));
+                petal = max(petal, 1.0 - step(0.30, length(p - vec2(-0.26, -0.15))));
+                float middle = 1.0 - step(0.23, length(p));
+                if (middle > 0.5) return vec4(1.0, 0.89, 0.64, 1.0);
+                if (petal > 0.5) return vec4(1.0, 0.35, 0.12, 1.0);
+                return baseColor;
+              }
+              if (style > 3.5) {
+                p.y += 0.12;
+                float x2y2 = p.x * p.x + p.y * p.y - 0.32;
+                float heart = x2y2 * x2y2 * x2y2 - p.x * p.x * p.y * p.y * p.y;
+                return heart <= 0.0 ? vec4(1.0, 0.79, 0.16, 1.0) : baseColor;
+              }
               if (style > 2.5) return vec4(0.0, 0.0, 0.0, 1.0);
               if (style > 1.5) {
                 vec2 blocks = max(vec2(1.0), uOutputSize / max(8.0, blockSize));
@@ -599,12 +620,12 @@ private class VideoRedactionShaderProgram(
             }
             void main() {
               vec4 color = texture2D(uTexSampler, vTexSamplingCoord);
-              if (uStyle0 > 0.5 && insideRect(vMaskCoord, uRect0)) color = privacyColor(uStyle0, uBlock0);
-              if (uStyle1 > 0.5 && insideRect(vMaskCoord, uRect1)) color = privacyColor(uStyle1, uBlock1);
-              if (uStyle2 > 0.5 && insideRect(vMaskCoord, uRect2)) color = privacyColor(uStyle2, uBlock2);
-              if (uStyle3 > 0.5 && insideRect(vMaskCoord, uRect3)) color = privacyColor(uStyle3, uBlock3);
-              if (uStyle4 > 0.5 && insideRect(vMaskCoord, uRect4)) color = privacyColor(uStyle4, uBlock4);
-              if (uStyle5 > 0.5 && insideRect(vMaskCoord, uRect5)) color = privacyColor(uStyle5, uBlock5);
+              if (uStyle0 > 0.5 && insideRect(vMaskCoord, uRect0)) color = privacyColor(uStyle0, uBlock0, uRect0, color);
+              if (uStyle1 > 0.5 && insideRect(vMaskCoord, uRect1)) color = privacyColor(uStyle1, uBlock1, uRect1, color);
+              if (uStyle2 > 0.5 && insideRect(vMaskCoord, uRect2)) color = privacyColor(uStyle2, uBlock2, uRect2, color);
+              if (uStyle3 > 0.5 && insideRect(vMaskCoord, uRect3)) color = privacyColor(uStyle3, uBlock3, uRect3, color);
+              if (uStyle4 > 0.5 && insideRect(vMaskCoord, uRect4)) color = privacyColor(uStyle4, uBlock4, uRect4, color);
+              if (uStyle5 > 0.5 && insideRect(vMaskCoord, uRect5)) color = privacyColor(uStyle5, uBlock5, uRect5, color);
               gl_FragColor = color;
             }
         """
