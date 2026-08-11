@@ -3,6 +3,22 @@ import 'dart:ui';
 
 import '../domain/models.dart';
 
+/// Converts a rectangular mask into a stroke that fully covers the rectangle
+/// while allowing later eraser gestures to split it into smaller pieces.
+BrushStroke redactionItemAsStroke(RedactionItem item, {required String id}) {
+  final bounds = item.bounds;
+  final horizontal = bounds.width >= bounds.height;
+  final center = bounds.center;
+  return BrushStroke(
+    id: id,
+    points: horizontal
+        ? [Offset(bounds.left, center.dy), Offset(bounds.right, center.dy)]
+        : [Offset(center.dx, bounds.top), Offset(center.dx, bounds.bottom)],
+    size: max(1, horizontal ? bounds.height : bounds.width),
+    style: item.style,
+  );
+}
+
 /// Removes only the part of a brush stroke covered by a circular eraser.
 List<BrushStroke> eraseBrushStroke(
   BrushStroke stroke, {

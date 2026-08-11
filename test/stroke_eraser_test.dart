@@ -1,3 +1,5 @@
+import 'dart:ui' show Rect;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:privacycam/domain/models.dart';
 import 'package:privacycam/services/stroke_eraser.dart';
@@ -48,5 +50,29 @@ void main() {
     );
 
     expect(fragments, isEmpty);
+  });
+
+  test('a detected text bar becomes a partially erasable stroke', () {
+    const item = RedactionItem(
+      id: 'email',
+      category: RedactionCategory.email,
+      bounds: Rect.fromLTWH(10, 20, 100, 12),
+      selected: true,
+      style: RedactionStyle.blackout,
+      source: RedactionSource.automatic,
+    );
+    final mask = redactionItemAsStroke(item, id: 'mask');
+    final fragments = eraseBrushStroke(
+      mask,
+      center: const Offset(60, 26),
+      radius: 8,
+      fragmentIdPrefix: 'part',
+    );
+
+    expect(mask.points, const [Offset(10, 26), Offset(110, 26)]);
+    expect(mask.size, 12);
+    expect(fragments, hasLength(2));
+    expect(fragments.first.points.last.dx, lessThan(60));
+    expect(fragments.last.points.first.dx, greaterThan(60));
   });
 }

@@ -373,7 +373,7 @@ class PdfSessionController extends Notifier<PdfSession?> {
   bool eraseAt(Offset point, {double radius = 18, bool recordHistory = true}) {
     final image = state!.currentPage!.image;
     final token = DateTime.now().microsecondsSinceEpoch;
-    var changedStroke = false;
+    var changed = false;
     final remainingStrokes = <BrushStroke>[];
     for (var index = 0; index < image.strokes.length; index++) {
       final stroke = image.strokes[index];
@@ -385,34 +385,45 @@ class PdfSessionController extends Notifier<PdfSession?> {
       );
       final unchanged =
           fragments.length == 1 && identical(fragments.first, stroke);
-      changedStroke = changedStroke || !unchanged;
+      changed = changed || !unchanged;
       remainingStrokes.addAll(fragments);
     }
-    if (changedStroke) {
-      _applyErasure(
-        image.copyWith(strokes: remainingStrokes),
-        recordHistory: recordHistory,
-      );
-      return true;
-    }
 
-    final hit = image.items
-        .where(
-          (item) =>
-              item.selected && item.bounds.inflate(radius).contains(point),
-        )
-        .lastOrNull;
-    if (hit == null) return false;
+    final partiallyErasedIds = <String>{};
+    for (var index = 0; index < image.items.length; index++) {
+      final item = image.items[index];
+      if (!item.selected || !item.bounds.inflate(radius).contains(point)) {
+        continue;
+      }
+      final maskStroke = redactionItemAsStroke(
+        item,
+        id: 'pdf_mask_${token}_$index',
+      );
+      final fragments = eraseBrushStroke(
+        maskStroke,
+        center: point,
+        radius: radius,
+        fragmentIdPrefix: 'pdf_mask_erased_${token}_$index',
+      );
+      final unchanged =
+          fragments.length == 1 && identical(fragments.first, maskStroke);
+      if (unchanged) continue;
+      changed = true;
+      partiallyErasedIds.add(item.id);
+      remainingStrokes.addAll(fragments);
+    }
+    if (!changed) return false;
 
     _applyErasure(
       image.copyWith(
         items: [
           for (final item in image.items)
-            if (item.id != hit.id)
+            if (!partiallyErasedIds.contains(item.id))
               item
             else if (item.source == RedactionSource.automatic)
               item.copyWith(selected: false),
         ],
+        strokes: remainingStrokes,
       ),
       recordHistory: recordHistory,
     );
