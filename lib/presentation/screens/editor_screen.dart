@@ -10,7 +10,6 @@ import '../../state/providers.dart';
 import '../widgets/adaptive_ui.dart';
 import '../widgets/batch_strip.dart';
 import '../widgets/image_geometry.dart';
-import '../widgets/new_image_action.dart';
 import '../widgets/privacy_loader.dart';
 import '../widgets/redaction_style_picker.dart';
 import '../widgets/sticker_redaction.dart';
@@ -34,16 +33,51 @@ class _EditorState extends ConsumerState<EditorScreen> {
   double brush = 28;
   bool exporting = false;
 
+  Future<void> _discardImage() async {
+    final batch = ref.read(batchProvider);
+    final isBatch = batch.isBatch;
+    final confirmed = await showAdaptiveActionSheet<bool>(
+      context: context,
+      title: isBatch ? 'Discard batch?' : 'Discard image?',
+      message: isBatch
+          ? 'These images and their unsaved privacy edits will be discarded.'
+          : 'This image and its unsaved privacy edits will be discarded.',
+      actions: [
+        AdaptiveAction(
+          label: isBatch ? 'Discard batch' : 'Discard image',
+          value: true,
+          destructive: true,
+          icon: Icons.delete_outline_rounded,
+        ),
+      ],
+      cancelLabel: 'Keep editing',
+    );
+    if (confirmed != true || !mounted) return;
+    await ref.read(sessionProvider.notifier).clear();
+    if (mounted) context.go('/home');
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = ref.watch(sessionProvider);
+    final batch = ref.watch(batchProvider);
     if (s == null) return const SizedBox();
     return Scaffold(
       appBar: adaptiveNavigationBar(
         context,
         title: const Text('Redact image'),
         actions: [
-          NewImageAction(enabled: !exporting),
+          AdaptiveIconButton(
+            tooltip: batch.isBatch ? 'Discard batch' : 'Discard image',
+            onPressed: exporting ? null : _discardImage,
+            icon: Icon(
+              adaptiveIcon(
+                context,
+                material: Icons.delete_outline_rounded,
+                cupertino: CupertinoIcons.delete,
+              ),
+            ),
+          ),
           AdaptiveIconButton(
             tooltip: 'Undo',
             onPressed: () => ref.read(sessionProvider.notifier).undo(),

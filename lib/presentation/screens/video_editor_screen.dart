@@ -1263,7 +1263,15 @@ class _VideoEditorScreenState extends ConsumerState<VideoEditorScreen> {
           )
           .toList();
     }
-    final hitId = _preferredTrack(matches)?.id;
+    final hit = _preferredTrack(matches);
+    // Match image and PDF review: tapping an orange (inactive) detection is
+    // an instruction to hide it. Previously the tap only focused the video
+    // track, so a detected full body could look chosen in the editor while it
+    // was still omitted from the native export payload.
+    if (hit != null && !hit.selected) {
+      ref.read(videoEditorProvider.notifier).toggleTrack(hit.id);
+    }
+    final hitId = hit?.id;
     final selectedId = ref.read(videoEditorProvider).selectedTrackId;
     _selectTrackAndReveal(hitId == selectedId ? null : hitId);
   }
@@ -1316,6 +1324,13 @@ class _VideoEditorScreenState extends ConsumerState<VideoEditorScreen> {
       _selectTrackAndReveal(selected?.id);
     }
     if (selected == null) return;
+    // Dragging an inactive outline is also an explicit edit of that privacy
+    // area. Activate it before applying the movement so the edited mask is
+    // guaranteed to be included in the exported video.
+    if (!selected.selected) {
+      ref.read(videoEditorProvider.notifier).toggleTrack(selected.id);
+      selected = selected.copyWith(selected: true);
+    }
     _initialBounds = selected.boundsAt(_timestampMs);
     _editingBounds = _initialBounds;
   }
