@@ -5,13 +5,14 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/theme.dart';
 import '../../domain/video_models.dart';
+import '../../state/providers.dart';
 import '../../state/video_providers.dart';
 import '../widgets/adaptive_ui.dart';
 import '../widgets/privacy_loader.dart';
 
 class VideoScanningScreen extends ConsumerStatefulWidget {
   const VideoScanningScreen({super.key, required this.path});
-  final String path;
+  final String? path;
 
   @override
   ConsumerState<VideoScanningScreen> createState() =>
@@ -31,23 +32,25 @@ class _VideoScanningScreenState extends ConsumerState<VideoScanningScreen> {
 
   Future<void> _start() async {
     try {
-      await ref.read(videoEditorProvider.notifier).importPath(widget.path);
+      final path = widget.path;
+      if (path != null) {
+        await ref.read(videoEditorProvider.notifier).importPath(path);
+      }
       if (!mounted) return;
+      final session = ref.read(videoEditorProvider).session;
+      if (session == null) {
+        context.go('/home');
+        return;
+      }
+      if (privacyCamVideoSessionRequiresPro(session) &&
+          !ref.read(proAccessProvider)) {
+        context.go('/video/trim');
+        return;
+      }
       await ref.read(videoEditorProvider.notifier).scan();
       if (!mounted) return;
       final state = ref.read(videoEditorProvider);
       if (state.stage == VideoWorkStage.ready) context.go('/video/editor');
-    } on VideoProRequiredException {
-      if (!mounted) return;
-      final unlocked = await context.push<bool>('/pro');
-      if (!mounted) return;
-      if (unlocked == true) {
-        await _start();
-        return;
-      }
-      await ref.read(videoServiceProvider).deleteWorkingFile(widget.path);
-      await ref.read(videoEditorProvider.notifier).clear();
-      if (mounted) context.go('/home');
     } catch (_) {
       // The controller owns the user-safe error message.
     }

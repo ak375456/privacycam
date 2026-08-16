@@ -17,6 +17,7 @@ import '../presentation/screens/scanning_screen.dart';
 import '../presentation/screens/settings_screen.dart';
 import '../presentation/screens/video_editor_screen.dart';
 import '../presentation/screens/video_export_screen.dart';
+import '../presentation/screens/video_clip_selection_screen.dart';
 import '../presentation/screens/video_scanning_screen.dart';
 import '../state/providers.dart';
 import '../domain/models.dart';
@@ -58,7 +59,11 @@ final routerProvider = Provider<GoRouter>(
       GoRoute(
         path: '/video/scan',
         builder: (_, state) =>
-            VideoScanningScreen(path: state.extra! as String),
+            VideoScanningScreen(path: state.extra as String?),
+      ),
+      GoRoute(
+        path: '/video/trim',
+        builder: (_, _) => const VideoClipSelectionScreen(),
       ),
       GoRoute(
         path: '/video/editor',

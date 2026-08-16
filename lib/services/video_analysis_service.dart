@@ -26,15 +26,31 @@ class VideoAnalysisService {
   }) async {
     // Faces need frequent positions to follow motion naturally. Expensive
     // object and text checks use their own, much slower cadence below.
-    final intervalMs = max(300, (session.durationMs / 120).ceil());
-    final timestamps = {
-      for (var time = 0; time < session.durationMs; time += intervalMs) time,
-      if (session.durationMs > 0) max(0, session.durationMs - 1),
-    }.toList()..sort();
-    onProgress(.02, 'Preparing ${timestamps.length} private frame checks');
+    final analysisRanges = session.resolvedEditPlan.keptRanges(
+      session.durationMs,
+    );
+    final analysisDurationMs = analysisRanges.fold<int>(
+      0,
+      (total, range) => total + range.durationMs,
+    );
+    final intervalMs = max(300, (analysisDurationMs / 120).ceil());
+    final timestamps = <int>{};
+    for (final range in analysisRanges) {
+      for (var time = range.startMs; time < range.endMs; time += intervalMs) {
+        timestamps.add(time);
+      }
+      if (range.durationMs > 0) {
+        timestamps.add(max(range.startMs, range.endMs - 1));
+      }
+    }
+    final sortedTimestamps = timestamps.toList()..sort();
+    onProgress(
+      .02,
+      'Preparing ${sortedTimestamps.length} private frame checks',
+    );
     final frames = await videoService.extractFrames(
       session.sourcePath,
-      timestamps,
+      sortedTimestamps,
     );
     final faceVerificationStride = _strideFor(600, intervalMs);
     final edgeProbeStride = _strideFor(1800, intervalMs);

@@ -18,6 +18,38 @@ class ReviewScreen extends ConsumerStatefulWidget {
 }
 
 class _ReviewState extends ConsumerState<ReviewScreen> {
+  final TransformationController _transformationController =
+      TransformationController();
+
+  @override
+  void dispose() {
+    _transformationController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _closeReview() async {
+    final batch = ref.read(batchProvider);
+    final confirmed = await showAdaptiveActionSheet<bool>(
+      context: context,
+      title: batch.isBatch ? 'Discard batch?' : 'Discard image?',
+      message: batch.isBatch
+          ? 'These images and their unsaved privacy edits will be discarded.'
+          : 'This image and its unsaved privacy edits will be discarded.',
+      actions: [
+        AdaptiveAction(
+          label: batch.isBatch ? 'Discard batch' : 'Discard image',
+          value: true,
+          destructive: true,
+          icon: Icons.delete_outline_rounded,
+        ),
+      ],
+      cancelLabel: 'Keep reviewing',
+    );
+    if (confirmed != true || !mounted) return;
+    await ref.read(sessionProvider.notifier).clear();
+    if (mounted) context.go('/home');
+  }
+
   IconData icon(RedactionCategory c) => switch (c) {
     RedactionCategory.face => Icons.face_outlined,
     RedactionCategory.person => Icons.accessibility_new_rounded,
@@ -46,6 +78,18 @@ class _ReviewState extends ConsumerState<ReviewScreen> {
       appBar: adaptiveNavigationBar(
         context,
         title: const Text('Choose what to hide'),
+        automaticallyImplyLeading: false,
+        leading: AdaptiveIconButton(
+          tooltip: 'Discard and return home',
+          onPressed: _closeReview,
+          icon: Icon(
+            adaptiveIcon(
+              context,
+              material: Icons.close_rounded,
+              cupertino: CupertinoIcons.xmark,
+            ),
+          ),
+        ),
         actions: const [NewImageAction()],
       ),
       body: Column(
@@ -129,16 +173,43 @@ class _ReviewState extends ConsumerState<ReviewScreen> {
                     Size(c.maxWidth, c.maxHeight),
                     Size(s.width.toDouble(), s.height.toDouble()),
                   );
+                  final canvas = GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTapUp: (details) =>
+                        _toggleNearest(g, details.localPosition, s),
+                    child: Stack(
+                      children: [
+                        Positioned(
+                          left: g.origin.dx,
+                          top: g.origin.dy,
+                          width: g.displayed.width,
+                          height: g.displayed.height,
+                          child: Image.file(
+                            File(s.sourcePath),
+                            fit: BoxFit.fill,
+                          ),
+                        ),
+                        for (final item in s.items) _box(g, item),
+                      ],
+                    ),
+                  );
                   return Stack(
                     children: [
-                      Positioned(
-                        left: g.origin.dx,
-                        top: g.origin.dy,
-                        width: g.displayed.width,
-                        height: g.displayed.height,
-                        child: Image.file(File(s.sourcePath), fit: BoxFit.fill),
+                      Positioned.fill(
+                        child: InteractiveViewer(
+                          transformationController: _transformationController,
+                          minScale: 1,
+                          maxScale: 8,
+                          boundaryMargin: const EdgeInsets.all(80),
+                          clipBehavior: Clip.hardEdge,
+                          child: SizedBox(
+                            width: c.maxWidth,
+                            height: c.maxHeight,
+                            child: canvas,
+                          ),
+                        ),
                       ),
-                      for (final item in s.items) _box(g, item),
+                      const Positioned(top: 8, right: 8, child: _PinchHint()),
                     ],
                   );
                 },
@@ -241,8 +312,8 @@ class _ReviewState extends ConsumerState<ReviewScreen> {
             ? '${item.category.label}. Will be hidden. Tap to keep visible.'
             : '${item.category.label}. Not hidden. Tap to hide.',
         button: true,
-        child: GestureDetector(
-          onTap: () => ref.read(sessionProvider.notifier).toggle(item.id),
+        onTap: () => ref.read(sessionProvider.notifier).toggle(item.id),
+        child: IgnorePointer(
           child: Container(
             decoration: BoxDecoration(
               color: item.selected
@@ -293,6 +364,44 @@ class _ReviewState extends ConsumerState<ReviewScreen> {
       ),
     );
   }
+
+  void _toggleNearest(
+    ImageGeometry geometry,
+    Offset localPosition,
+    ImageSession session,
+  ) {
+    final zoom = _transformationController.value.getMaxScaleOnAxis();
+    final item = hitTestRedactionItems(
+      session.items,
+      geometry.toImage(localPosition),
+      displayScale: geometry.factor * zoom,
+    );
+    if (item != null) {
+      ref.read(sessionProvider.notifier).toggle(item.id);
+    }
+  }
+}
+
+class _PinchHint extends StatelessWidget {
+  const _PinchHint();
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: 'Pinch to zoom',
+    child: IgnorePointer(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: const Color(0xD91B211F),
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white24),
+        ),
+        child: const SizedBox.square(
+          dimension: 40,
+          child: Icon(Icons.pinch_rounded, size: 21, color: Colors.white),
+        ),
+      ),
+    ),
+  );
 }
 
 class _SelectionLegend extends StatelessWidget {

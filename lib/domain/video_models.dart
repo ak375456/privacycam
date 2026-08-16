@@ -600,3 +600,8 @@ class VideoSession {
     for (final range in resolvedEditPlan.keptRanges(durationMs)) range.toJson(),
   ];
 }
+
+bool privacyCamVideoSessionRequiresPro(VideoSession session) =>
+    privacyCamVideoRequiresPro(
+      session.resolvedEditPlan.outputDurationMs(session.durationMs),
+    );

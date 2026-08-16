@@ -34,6 +34,8 @@ class VideoEditorScreen extends ConsumerStatefulWidget {
 }
 
 class _VideoEditorScreenState extends ConsumerState<VideoEditorScreen> {
+  final TransformationController _videoTransformationController =
+      TransformationController();
   VideoPlayerController? _player;
   ui.FragmentProgram? _pixelProgram;
   _VideoTool _tool = _VideoTool.select;
@@ -47,6 +49,7 @@ class _VideoEditorScreenState extends ConsumerState<VideoEditorScreen> {
   Rect? _editingBounds;
   List<VideoFrame> _timelineFrames = const [];
   bool _correctingPlayback = false;
+  bool _videoPinchGesture = false;
   bool _clipEditorOpen = false;
   bool _edgeHoldOpen = false;
   final ScrollController _controlsScroll = ScrollController();
@@ -138,6 +141,7 @@ class _VideoEditorScreenState extends ConsumerState<VideoEditorScreen> {
       unawaited(ref.read(videoServiceProvider).deleteFrames(_timelineFrames));
     }
     _controlsScroll.dispose();
+    _videoTransformationController.dispose();
     super.dispose();
   }
 
@@ -210,40 +214,72 @@ class _VideoEditorScreenState extends ConsumerState<VideoEditorScreen> {
                       : AspectRatio(
                           aspectRatio: player.value.aspectRatio,
                           child: LayoutBuilder(
-                            builder: (context, constraints) => GestureDetector(
-                              behavior: HitTestBehavior.opaque,
-                              onTapUp: (details) => _tapTrack(
-                                details.localPosition,
-                                constraints.biggest,
-                                session,
-                              ),
-                              onPanStart: (details) => _panStart(
-                                details.localPosition,
-                                constraints.biggest,
-                                session,
-                              ),
-                              onPanUpdate: (details) => _panUpdate(
-                                details.localPosition,
-                                constraints.biggest,
-                                session,
-                              ),
-                              onPanEnd: (_) => _panEnd(session),
-                              child: Stack(
-                                fit: StackFit.expand,
+                            builder: (context, constraints) {
+                              final size = constraints.biggest;
+                              final canvas = GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTapUp: (details) => _tapTrack(
+                                  details.localPosition,
+                                  size,
+                                  session,
+                                ),
+                                child: Stack(
+                                  fit: StackFit.expand,
+                                  children: [
+                                    VideoPlayer(player),
+                                    VideoRedactionOverlay(
+                                      tracks: _previewTracks(session),
+                                      timestampMs: _timestampMs,
+                                      selectedTrackId: state.selectedTrackId,
+                                      blurStrength: settings.blurStrength,
+                                      pixelSize: settings.pixelSize,
+                                      pixelProgram: _pixelProgram,
+                                      draftBounds: _draft,
+                                    ),
+                                  ],
+                                ),
+                              );
+                              return Stack(
                                 children: [
-                                  VideoPlayer(player),
-                                  VideoRedactionOverlay(
-                                    tracks: _previewTracks(session),
-                                    timestampMs: _timestampMs,
-                                    selectedTrackId: state.selectedTrackId,
-                                    blurStrength: settings.blurStrength,
-                                    pixelSize: settings.pixelSize,
-                                    pixelProgram: _pixelProgram,
-                                    draftBounds: _draft,
+                                  Positioned.fill(
+                                    child: InteractiveViewer(
+                                      transformationController:
+                                          _videoTransformationController,
+                                      panEnabled: _videoPinchGesture,
+                                      scaleEnabled: true,
+                                      minScale: 1,
+                                      maxScale: 8,
+                                      boundaryMargin: const EdgeInsets.all(60),
+                                      clipBehavior: Clip.hardEdge,
+                                      onInteractionStart: (details) =>
+                                          _videoInteractionStart(
+                                            details,
+                                            size,
+                                            session,
+                                          ),
+                                      onInteractionUpdate: (details) =>
+                                          _videoInteractionUpdate(
+                                            details,
+                                            size,
+                                            session,
+                                          ),
+                                      onInteractionEnd: (_) =>
+                                          _videoInteractionEnd(session),
+                                      child: SizedBox(
+                                        width: size.width,
+                                        height: size.height,
+                                        child: canvas,
+                                      ),
+                                    ),
+                                  ),
+                                  const Positioned(
+                                    top: 8,
+                                    right: 8,
+                                    child: _VideoPinchHint(),
                                   ),
                                 ],
-                              ),
-                            ),
+                              );
+                            },
                           ),
                         ),
                 ),
@@ -586,7 +622,7 @@ class _VideoEditorScreenState extends ConsumerState<VideoEditorScreen> {
   );
 
   Future<void> _openExport(VideoSession session) async {
-    if (privacyCamVideoRequiresPro(session.durationMs) &&
+    if (privacyCamVideoSessionRequiresPro(session) &&
         !ref.read(proAccessProvider)) {
       final unlocked = await context.push<bool>('/pro');
       if (!mounted || unlocked != true) return;
@@ -1199,8 +1235,10 @@ class _VideoEditorScreenState extends ConsumerState<VideoEditorScreen> {
     final value = bounds.width.clamp(minWidth, maxWidth);
     return Row(
       children: [
+        const Icon(Icons.photo_size_select_large_rounded, size: 19),
+        const SizedBox(width: 6),
         const Text(
-          'Area size',
+          'Mask size',
           style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800),
         ),
         const SizedBox(width: 8),
@@ -1259,7 +1297,10 @@ class _VideoEditorScreenState extends ConsumerState<VideoEditorScreen> {
           .where(
             (track) =>
                 track.existsAt(_timestampMs) &&
-                track.boundsAt(_timestampMs).inflate(.02).contains(point),
+                _minimumVideoHitRect(
+                  track.boundsAt(_timestampMs),
+                  size,
+                ).contains(point),
           )
           .toList();
     }
@@ -1312,12 +1353,18 @@ class _VideoEditorScreenState extends ConsumerState<VideoEditorScreen> {
     final nearby = session.tracks.where(
       (track) =>
           track.existsAt(_timestampMs) &&
-          track.boundsAt(_timestampMs).inflate(.018).contains(point),
+          _minimumVideoHitRect(
+            track.boundsAt(_timestampMs),
+            size,
+          ).contains(point),
     );
     final preferred = _preferredTrack(nearby);
     if (selected == null ||
         !selected.existsAt(_timestampMs) ||
-        !selected.boundsAt(_timestampMs).inflate(.025).contains(point) ||
+        !_minimumVideoHitRect(
+          selected.boundsAt(_timestampMs),
+          size,
+        ).contains(point) ||
         selected.category == RedactionCategory.person &&
             preferred?.category == RedactionCategory.face) {
       selected = preferred;
@@ -1447,6 +1494,73 @@ class _VideoEditorScreenState extends ConsumerState<VideoEditorScreen> {
     _selectTrackAndReveal(id);
   }
 
+  Rect _minimumVideoHitRect(Rect bounds, Size viewport) {
+    final zoom = _videoTransformationController.value.getMaxScaleOnAxis();
+    final minimumWidth = 48 / max(1, viewport.width * zoom);
+    final minimumHeight = 48 / max(1, viewport.height * zoom);
+    return Rect.fromCenter(
+      center: bounds.center,
+      width: max(bounds.width, minimumWidth),
+      height: max(bounds.height, minimumHeight),
+    );
+  }
+
+  void _videoInteractionStart(
+    ScaleStartDetails details,
+    Size size,
+    VideoSession session,
+  ) {
+    _videoPinchGesture = details.pointerCount > 1;
+    if (_videoPinchGesture) {
+      _cancelVideoGesture();
+      return;
+    }
+    _panStart(
+      _videoTransformationController.toScene(details.localFocalPoint),
+      size,
+      session,
+    );
+  }
+
+  void _videoInteractionUpdate(
+    ScaleUpdateDetails details,
+    Size size,
+    VideoSession session,
+  ) {
+    if (details.pointerCount > 1 || details.scale != 1) {
+      if (!_videoPinchGesture) {
+        _videoPinchGesture = true;
+        _cancelVideoGesture();
+      }
+      return;
+    }
+    if (_videoPinchGesture) return;
+    _panUpdate(
+      _videoTransformationController.toScene(details.localFocalPoint),
+      size,
+      session,
+    );
+  }
+
+  void _videoInteractionEnd(VideoSession session) {
+    if (_videoPinchGesture) {
+      _videoPinchGesture = false;
+      _cancelVideoGesture();
+      return;
+    }
+    unawaited(_panEnd(session));
+  }
+
+  void _cancelVideoGesture() {
+    if (!mounted) return;
+    setState(() {
+      _gestureStart = null;
+      _initialBounds = null;
+      _editingBounds = null;
+      _draft = null;
+    });
+  }
+
   List<VideoRedactionTrack> _previewTracks(VideoSession session) {
     final id = ref.read(videoEditorProvider).selectedTrackId;
     final bounds = _editingBounds;
@@ -1489,4 +1603,26 @@ class _VideoEditorScreenState extends ConsumerState<VideoEditorScreen> {
     final fraction = safe.remainder(1000).toString().padLeft(3, '0');
     return '$minutes:$seconds.$fraction';
   }
+}
+
+class _VideoPinchHint extends StatelessWidget {
+  const _VideoPinchHint();
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: 'Pinch to zoom the video',
+    child: IgnorePointer(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: const Color(0xD91B211F),
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white24),
+        ),
+        child: const SizedBox.square(
+          dimension: 40,
+          child: Icon(Icons.pinch_rounded, size: 21, color: Colors.white),
+        ),
+      ),
+    ),
+  );
 }

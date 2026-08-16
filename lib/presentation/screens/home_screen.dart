@@ -182,10 +182,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Future<void> _resumeVideo() async {
     final session = ref.read(videoEditorProvider).session;
     if (session == null) return;
-    if (privacyCamVideoRequiresPro(session.durationMs) &&
+    if (privacyCamVideoSessionRequiresPro(session) &&
         !ref.read(proAccessProvider)) {
-      final unlocked = await context.push<bool>('/pro');
-      if (!mounted || unlocked != true) return;
+      context.push('/video/trim');
+      return;
     }
     if (session.tracks.isEmpty) {
       context.push('/video/scan', extra: session.sourcePath);

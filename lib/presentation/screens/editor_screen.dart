@@ -21,6 +21,8 @@ class EditorScreen extends ConsumerStatefulWidget {
 }
 
 class _EditorState extends ConsumerState<EditorScreen> {
+  final TransformationController _transformationController =
+      TransformationController();
   EditorTool tool = EditorTool.select;
   RedactionStyle style = RedactionStyle.blackout;
   String? active;
@@ -28,10 +30,18 @@ class _EditorState extends ConsumerState<EditorScreen> {
   Offset? lastPoint;
   Rect? draftBounds;
   Rect? interactionBounds;
-  _RectHandle activeHandle = _RectHandle.move;
+  Rect? resizeOrigin;
   List<Offset> stroke = [];
   double brush = 28;
+  double areaScale = 100;
+  bool pinchGesture = false;
   bool exporting = false;
+
+  @override
+  void dispose() {
+    _transformationController.dispose();
+    super.dispose();
+  }
 
   Future<void> _discardImage() async {
     final batch = ref.read(batchProvider);
@@ -111,7 +121,10 @@ class _EditorState extends ConsumerState<EditorScreen> {
                   active = null;
                   draftBounds = null;
                   interactionBounds = null;
+                  resizeOrigin = null;
+                  areaScale = 100;
                   stroke = [];
+                  _transformationController.value = Matrix4.identity();
                 }),
               ),
               Expanded(
@@ -124,13 +137,13 @@ class _EditorState extends ConsumerState<EditorScreen> {
                         Size(s.width.toDouble(), s.height.toDouble()),
                       );
                       final content = GestureDetector(
-                        onPanStart: (d) => _start(g, d.localPosition, s),
-                        onPanUpdate: (d) => _update(g, d.localPosition, s),
-                        onPanEnd: (_) => _end(g, s),
+                        behavior: HitTestBehavior.opaque,
                         onTapUp: (d) => tool == EditorTool.eraser
                             ? ref
                                   .read(sessionProvider.notifier)
                                   .eraseNearest(g.toImage(d.localPosition))
+                            : tool == EditorTool.select
+                            ? _selectNearest(g, d.localPosition, s)
                             : null,
                         child: Stack(
                           children: [
@@ -161,22 +174,46 @@ class _EditorState extends ConsumerState<EditorScreen> {
                           ],
                         ),
                       );
-                      return tool == EditorTool.zoom
-                          ? InteractiveViewer(
-                              minScale: .5,
-                              maxScale: 6,
+                      return Stack(
+                        children: [
+                          Positioned.fill(
+                            child: InteractiveViewer(
+                              transformationController:
+                                  _transformationController,
+                              // One finger edits. A second finger turns the
+                              // same gesture into pan + pinch zoom.
+                              panEnabled: pinchGesture,
+                              scaleEnabled: true,
+                              minScale: 1,
+                              maxScale: 8,
+                              boundaryMargin: const EdgeInsets.all(80),
+                              clipBehavior: Clip.hardEdge,
+                              onInteractionStart: (details) =>
+                                  _interactionStart(g, details, s),
+                              onInteractionUpdate: (details) =>
+                                  _interactionUpdate(g, details, s),
+                              onInteractionEnd: (_) => _interactionEnd(g, s),
                               child: SizedBox(
                                 width: c.maxWidth,
                                 height: c.maxHeight,
                                 child: content,
                               ),
-                            )
-                          : content;
+                            ),
+                          ),
+                          const Positioned(
+                            top: 8,
+                            right: 8,
+                            child: _EditorPinchHint(),
+                          ),
+                        ],
+                      );
                     },
                   ),
                 ),
               ),
               _styles(),
+              if (active != null && tool == EditorTool.select)
+                _selectedAreaControls(s),
               _tools(),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
@@ -269,7 +306,14 @@ class _EditorState extends ConsumerState<EditorScreen> {
                   value: style,
                   onChanged: (value) {
                     setState(() => style = value);
-                    ref.read(sessionProvider.notifier).setAllStyle(value);
+                    final selectedId = active;
+                    if (selectedId != null && tool == EditorTool.select) {
+                      ref
+                          .read(sessionProvider.notifier)
+                          .setStyle(selectedId, value);
+                    } else {
+                      ref.read(sessionProvider.notifier).setAllStyle(value);
+                    }
                   },
                 ),
               ),
@@ -310,7 +354,6 @@ class _EditorState extends ConsumerState<EditorScreen> {
         _tool(EditorTool.rectangle, Icons.crop_square, 'Rectangle'),
         _tool(EditorTool.brush, Icons.brush_outlined, 'Brush'),
         _tool(EditorTool.eraser, Icons.auto_fix_normal, 'Eraser'),
-        _tool(EditorTool.zoom, Icons.zoom_in, 'Zoom'),
         _action(
           Icons.restart_alt,
           'Reset',
@@ -320,7 +363,10 @@ class _EditorState extends ConsumerState<EditorScreen> {
     ),
   );
   Widget _tool(EditorTool t, IconData i, String l) => _action(i, l, () {
-    setState(() => tool = t);
+    setState(() {
+      tool = t;
+      if (t != EditorTool.select) _clearSelection();
+    });
     HapticFeedback.selectionClick();
   }, selected: tool == t);
   Widget _action(
@@ -368,24 +414,51 @@ class _EditorState extends ConsumerState<EditorScreen> {
     } else if (tool == EditorTool.brush) {
       stroke = [p];
       setState(() {});
+    } else if (tool == EditorTool.select) {
+      final hit = hitTestRedactionItems(
+        s.items.where((item) => item.selected),
+        p,
+        displayScale:
+            g.factor * _transformationController.value.getMaxScaleOnAxis(),
+      );
+      setState(() {
+        active = hit?.id;
+        interactionBounds = hit?.bounds;
+        resizeOrigin = hit?.bounds;
+        areaScale = 100;
+        if (hit != null) style = hit.style;
+      });
     }
   }
 
   void _update(ImageGeometry g, Offset local, ImageSession s) {
     final p = g.toImage(local);
-    lastPoint = p;
     if (tool == EditorTool.brush) {
       setState(() => stroke.add(p));
     } else if (tool == EditorTool.rectangle && start != null) {
       setState(() => draftBounds = g.clamp(Rect.fromPoints(start!, p)));
+    } else if (tool == EditorTool.select && interactionBounds != null) {
+      final previous = lastPoint;
+      if (previous != null) {
+        setState(
+          () => interactionBounds = _clampShift(
+            interactionBounds!,
+            p - previous,
+            s,
+          ),
+        );
+      }
     }
+    lastPoint = p;
   }
 
   void _end(ImageGeometry g, ImageSession s) {
     String? createdRectangleId;
+    Rect? createdRectangleBounds;
     if (tool == EditorTool.rectangle && start != null) {
       final box = draftBounds ?? Rect.fromPoints(start!, lastPoint ?? start!);
       if (box.width >= 12 && box.height >= 12) {
+        createdRectangleBounds = box;
         createdRectangleId = ref
             .read(sessionProvider.notifier)
             .addRectangle(box, style);
@@ -401,6 +474,8 @@ class _EditorState extends ConsumerState<EditorScreen> {
               style: style,
             ),
           );
+    } else if (tool == EditorTool.select) {
+      _commitInteraction();
     }
     setState(() {
       start = null;
@@ -410,6 +485,9 @@ class _EditorState extends ConsumerState<EditorScreen> {
       if (createdRectangleId != null) {
         active = createdRectangleId;
         tool = EditorTool.select;
+        interactionBounds = createdRectangleBounds;
+        resizeOrigin = createdRectangleBounds;
+        areaScale = 100;
       }
     });
     HapticFeedback.lightImpact();
@@ -423,20 +501,7 @@ class _EditorState extends ConsumerState<EditorScreen> {
     final showHandles = active == item.id && tool == EditorTool.select;
     return Positioned.fromRect(
       rect: r,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: tool == EditorTool.select
-            ? () => setState(() => active = item.id)
-            : null,
-        onPanStart: tool == EditorTool.select
-            ? (details) =>
-                  _startItemGesture(item, details.localPosition, r.size)
-            : null,
-        onPanUpdate: tool == EditorTool.select
-            ? (details) => _updateItemGesture(g, details.delta)
-            : null,
-        onPanEnd: tool == EditorTool.select ? (_) => _endItemGesture() : null,
-        onLongPress: () => _itemMenu(item),
+      child: IgnorePointer(
         child: Stack(
           fit: StackFit.expand,
           children: [
@@ -466,13 +531,7 @@ class _EditorState extends ConsumerState<EditorScreen> {
                   ),
                 ),
               ),
-            if (showHandles) ...[
-              const _CornerHandle(alignment: Alignment.topLeft),
-              const _CornerHandle(alignment: Alignment.topRight),
-              const _CornerHandle(alignment: Alignment.bottomLeft),
-              const _CornerHandle(alignment: Alignment.bottomRight),
-              const _MoveHandle(),
-            ],
+            if (showHandles) ...[const _MoveHandle()],
           ],
         ),
       ),
@@ -518,152 +577,207 @@ class _EditorState extends ConsumerState<EditorScreen> {
     );
   }
 
-  void _startItemGesture(RedactionItem item, Offset local, Size size) {
-    const hit = 30.0;
-    activeHandle = switch ((local.dx, local.dy)) {
-      (final x, final y) when x <= hit && y <= hit => _RectHandle.topLeft,
-      (final x, final y) when x >= size.width - hit && y <= hit =>
-        _RectHandle.topRight,
-      (final x, final y) when x <= hit && y >= size.height - hit =>
-        _RectHandle.bottomLeft,
-      (final x, final y) when x >= size.width - hit && y >= size.height - hit =>
-        _RectHandle.bottomRight,
-      _ => _RectHandle.move,
-    };
-    setState(() {
-      active = item.id;
-      interactionBounds = item.bounds;
-    });
-    HapticFeedback.selectionClick();
-  }
-
-  void _updateItemGesture(ImageGeometry g, Offset screenDelta) {
-    final current = interactionBounds;
-    if (current == null) return;
-    final delta = screenDelta / g.factor;
-    const minimum = 12.0;
-    Rect next;
-    switch (activeHandle) {
-      case _RectHandle.move:
-        final dx = delta.dx.clamp(
-          -current.left,
-          g.imageSize.width - current.right,
-        );
-        final dy = delta.dy.clamp(
-          -current.top,
-          g.imageSize.height - current.bottom,
-        );
-        next = current.shift(Offset(dx, dy));
-      case _RectHandle.topLeft:
-        next = Rect.fromLTRB(
-          (current.left + delta.dx).clamp(0, current.right - minimum),
-          (current.top + delta.dy).clamp(0, current.bottom - minimum),
-          current.right,
-          current.bottom,
-        );
-      case _RectHandle.topRight:
-        next = Rect.fromLTRB(
-          current.left,
-          (current.top + delta.dy).clamp(0, current.bottom - minimum),
-          (current.right + delta.dx).clamp(
-            current.left + minimum,
-            g.imageSize.width,
-          ),
-          current.bottom,
-        );
-      case _RectHandle.bottomLeft:
-        next = Rect.fromLTRB(
-          (current.left + delta.dx).clamp(0, current.right - minimum),
-          current.top,
-          current.right,
-          (current.bottom + delta.dy).clamp(
-            current.top + minimum,
-            g.imageSize.height,
-          ),
-        );
-      case _RectHandle.bottomRight:
-        next = Rect.fromLTRB(
-          current.left,
-          current.top,
-          (current.right + delta.dx).clamp(
-            current.left + minimum,
-            g.imageSize.width,
-          ),
-          (current.bottom + delta.dy).clamp(
-            current.top + minimum,
-            g.imageSize.height,
-          ),
-        );
-    }
-    setState(() => interactionBounds = next);
-  }
-
-  void _endItemGesture() {
-    final id = active;
-    final bounds = interactionBounds;
-    if (id != null && bounds != null) {
-      ref.read(sessionProvider.notifier).updateBounds(id, bounds);
-    }
-    setState(() => interactionBounds = null);
-    HapticFeedback.lightImpact();
-  }
-
   Widget _strokePaint(ImageGeometry g, BrushStroke s) =>
       CustomPaint(size: Size.infinite, painter: _StrokePainter(g, s));
-  Future<void> _itemMenu(RedactionItem item) async {
-    final choice = await showAdaptiveActionSheet<_ItemMenuChoice>(
-      context: context,
-      title: 'Rectangle options',
-      actions: const [
-        AdaptiveAction(
-          label: 'Use blur',
-          value: _ItemMenuChoice.blur,
-          icon: Icons.blur_on_outlined,
+
+  Widget _selectedAreaControls(ImageSession session) {
+    final item = session.items.where((item) => item.id == active).firstOrNull;
+    if (item == null) return const SizedBox.shrink();
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 6),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+        decoration: BoxDecoration(
+          color: mint,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFB2D8CA)),
         ),
-        AdaptiveAction(
-          label: 'Use pixelate',
-          value: _ItemMenuChoice.pixelate,
-          icon: Icons.grid_4x4_outlined,
+        child: Column(
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.open_with_rounded, color: forest, size: 19),
+                const SizedBox(width: 7),
+                const Expanded(
+                  child: Text(
+                    'Drag the mask to move it',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Delete mask',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () {
+                    ref.read(sessionProvider.notifier).deleteItem(item.id);
+                    setState(_clearSelection);
+                  },
+                  icon: const Icon(Icons.delete_outline, color: Colors.red),
+                ),
+              ],
+            ),
+            Row(
+              children: [
+                const Icon(Icons.photo_size_select_large_rounded, size: 19),
+                const SizedBox(width: 7),
+                const Text(
+                  'Mask size',
+                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800),
+                ),
+                Expanded(
+                  child: AdaptiveSlider(
+                    value: areaScale,
+                    min: 40,
+                    max: 300,
+                    onChanged: (value) => _previewScale(value, item, session),
+                    onChangeEnd: (_) => _commitInteraction(),
+                  ),
+                ),
+                SizedBox(
+                  width: 44,
+                  child: Text(
+                    '${areaScale.round()}%',
+                    textAlign: TextAlign.end,
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
-        AdaptiveAction(
-          label: 'Use blackout',
-          value: _ItemMenuChoice.blackout,
-          icon: Icons.crop_square,
-        ),
-        AdaptiveAction(
-          label: 'Use emoji',
-          value: _ItemMenuChoice.emoji,
-          icon: Icons.favorite_outline,
-        ),
-        AdaptiveAction(
-          label: 'Use flowers',
-          value: _ItemMenuChoice.flowers,
-          icon: Icons.local_florist_outlined,
-        ),
-        AdaptiveAction(
-          label: 'Delete rectangle',
-          value: _ItemMenuChoice.delete,
-          icon: Icons.delete_outline,
-          destructive: true,
-        ),
-      ],
+      ),
     );
-    if (!mounted || choice == null) return;
-    final notifier = ref.read(sessionProvider.notifier);
-    switch (choice) {
-      case _ItemMenuChoice.blur:
-        notifier.setStyle(item.id, RedactionStyle.blur);
-      case _ItemMenuChoice.pixelate:
-        notifier.setStyle(item.id, RedactionStyle.pixelate);
-      case _ItemMenuChoice.blackout:
-        notifier.setStyle(item.id, RedactionStyle.blackout);
-      case _ItemMenuChoice.emoji:
-        notifier.setStyle(item.id, RedactionStyle.emoji);
-      case _ItemMenuChoice.flowers:
-        notifier.setStyle(item.id, RedactionStyle.flowers);
-      case _ItemMenuChoice.delete:
-        notifier.deleteItem(item.id);
+  }
+
+  void _previewScale(double value, RedactionItem item, ImageSession session) {
+    resizeOrigin ??= interactionBounds ?? item.bounds;
+    final origin = resizeOrigin!;
+    final factor = value / 100;
+    final width = (origin.width * factor)
+        .clamp(12, session.width.toDouble())
+        .toDouble();
+    final height = (origin.height * factor)
+        .clamp(12, session.height.toDouble())
+        .toDouble();
+    final imageRect = Rect.fromLTWH(
+      0,
+      0,
+      session.width.toDouble(),
+      session.height.toDouble(),
+    );
+    setState(() {
+      areaScale = value;
+      interactionBounds = Rect.fromCenter(
+        center: origin.center,
+        width: width,
+        height: height,
+      ).intersect(imageRect);
+    });
+  }
+
+  void _interactionStart(
+    ImageGeometry geometry,
+    ScaleStartDetails details,
+    ImageSession session,
+  ) {
+    pinchGesture = details.pointerCount > 1;
+    if (pinchGesture) {
+      _cancelGesture();
+      return;
     }
+    _start(
+      geometry,
+      _transformationController.toScene(details.localFocalPoint),
+      session,
+    );
+  }
+
+  void _interactionUpdate(
+    ImageGeometry geometry,
+    ScaleUpdateDetails details,
+    ImageSession session,
+  ) {
+    if (details.pointerCount > 1 || details.scale != 1) {
+      if (!pinchGesture) {
+        pinchGesture = true;
+        _cancelGesture();
+      }
+      return;
+    }
+    if (pinchGesture) return;
+    _update(
+      geometry,
+      _transformationController.toScene(details.localFocalPoint),
+      session,
+    );
+  }
+
+  void _interactionEnd(ImageGeometry geometry, ImageSession session) {
+    if (pinchGesture) {
+      pinchGesture = false;
+      _cancelGesture();
+      return;
+    }
+    _end(geometry, session);
+  }
+
+  void _selectNearest(
+    ImageGeometry geometry,
+    Offset local,
+    ImageSession session,
+  ) {
+    final item = hitTestRedactionItems(
+      session.items.where((item) => item.selected),
+      geometry.toImage(local),
+      displayScale:
+          geometry.factor * _transformationController.value.getMaxScaleOnAxis(),
+    );
+    setState(() {
+      active = item?.id;
+      interactionBounds = item?.bounds;
+      resizeOrigin = item?.bounds;
+      areaScale = 100;
+      if (item != null) style = item.style;
+    });
+  }
+
+  Rect _clampShift(Rect bounds, Offset delta, ImageSession session) {
+    final dx = delta.dx.clamp(-bounds.left, session.width - bounds.right);
+    final dy = delta.dy.clamp(-bounds.top, session.height - bounds.bottom);
+    return bounds.shift(Offset(dx, dy));
+  }
+
+  void _commitInteraction() {
+    final id = active;
+    final bounds = interactionBounds;
+    if (id == null || bounds == null) return;
+    ref.read(sessionProvider.notifier).updateBounds(id, bounds);
+    if (mounted) {
+      setState(() {
+        resizeOrigin = bounds;
+        areaScale = 100;
+      });
+    }
+  }
+
+  void _cancelGesture() {
+    if (!mounted) return;
+    setState(() {
+      start = null;
+      lastPoint = null;
+      draftBounds = null;
+      stroke = [];
+    });
+  }
+
+  void _clearSelection() {
+    active = null;
+    interactionBounds = null;
+    resizeOrigin = null;
+    areaScale = 100;
   }
 }
 
@@ -701,35 +815,8 @@ class _StrokePainter extends CustomPainter {
   bool shouldRepaint(covariant _StrokePainter old) => old.s != s;
 }
 
-enum _RectHandle { move, topLeft, topRight, bottomLeft, bottomRight }
-
 bool _isSticker(RedactionStyle style) =>
     style == RedactionStyle.emoji || style == RedactionStyle.flowers;
-
-enum _ItemMenuChoice { blur, pixelate, blackout, emoji, flowers, delete }
-
-class _CornerHandle extends StatelessWidget {
-  const _CornerHandle({required this.alignment});
-  final Alignment alignment;
-
-  @override
-  Widget build(BuildContext context) => Align(
-    alignment: alignment,
-    child: Container(
-      width: 18,
-      height: 18,
-      margin: const EdgeInsets.all(2),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        shape: BoxShape.circle,
-        border: Border.all(color: Colors.black87, width: 2),
-        boxShadow: const [
-          BoxShadow(color: Colors.black38, blurRadius: 3, offset: Offset(0, 1)),
-        ],
-      ),
-    ),
-  );
-}
 
 class _MoveHandle extends StatelessWidget {
   const _MoveHandle();
@@ -748,6 +835,28 @@ class _MoveHandle extends StatelessWidget {
         ],
       ),
       child: const Icon(Icons.open_with, size: 20, color: Colors.black87),
+    ),
+  );
+}
+
+class _EditorPinchHint extends StatelessWidget {
+  const _EditorPinchHint();
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: 'Pinch to zoom',
+    child: IgnorePointer(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: const Color(0xD91B211F),
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white24),
+        ),
+        child: const SizedBox.square(
+          dimension: 40,
+          child: Icon(Icons.pinch_rounded, size: 21, color: Colors.white),
+        ),
+      ),
     ),
   );
 }
